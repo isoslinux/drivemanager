@@ -1,0 +1,23 @@
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+*.egg-info/
+
+# Local build products and private runtime data
+work/
+outputs/
+*.rpm
+*.tar.gz
+*.zip
+*.conf
+*.sock
+*.sqlite*
+.env
+.env.*
+.config/
+.cache/
+.local/
+.codex/
+.aws/

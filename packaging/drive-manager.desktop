@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Drive Manager
+Comment=Manage read-only Google Drive mounts
+Comment[es]=Gestionar montajes de Google Drive en solo lectura
+Exec=drive-manager
+Icon=drive-harddisk
+Terminal=false
+Categories=System;FileManager;Qt;

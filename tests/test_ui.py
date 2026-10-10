@@ -1,0 +1,71 @@
+import os
+import unittest
+from unittest.mock import patch
+
+@unittest.skipUnless(os.environ.get('QT_QPA_PLATFORM') == 'offscreen', 'Set QT_QPA_PLATFORM=offscreen for UI smoke')
+class UiSmoke(unittest.TestCase):
+    def test_window_and_actions(self):
+        from PySide6.QtWidgets import QApplication
+        from PySide6.QtCore import QTimer, QEventLoop
+        from drive_manager.app import Window
+        from drive_manager.service import Status
+        app = QApplication.instance() or QApplication([])
+        with patch('drive_manager.service.Manager.provider_of', return_value='drive'), patch('drive_manager.service.Manager.discover_accounts', return_value=['demo']), patch('drive_manager.service.Manager.status', return_value=Status('unmounted', '/demo')):
+            window = Window()
+            window.show()
+            loop = QEventLoop()
+            QTimer.singleShot(800, loop.quit)
+            loop.exec()
+            self.assertEqual(window.accounts.currentText(), 'demo')
+            self.assertTrue(window.buttons['mount'].isEnabled())
+            self.assertFalse(window.buttons['unmount'].isEnabled())
+            self.assertTrue(window.buttons['settings'].isEnabled())
+            from drive_manager.settings import Preferences
+            from PySide6.QtWidgets import QLineEdit, QSpinBox
+            def accept_dialog():
+                dialog = app.activeModalWidget()
+                dialog.findChild(QLineEdit).setText('/demo/new')
+                spins = dialog.findChildren(QSpinBox)
+                spins[0].setValue(8); spins[1].setValue(48)
+                dialog.accept()
+            with patch.object(window.manager, 'save_preferences', return_value=Status('unmounted', '/demo/new')) as save:
+                QTimer.singleShot(0, accept_dialog)
+                window.settings_dialog(Preferences('/demo'))
+                loop = QEventLoop()
+                QTimer.singleShot(600, loop.quit)
+                loop.exec()
+                save.assert_called_once_with('demo', Preferences('/demo/new', 8, 48))
+            window.show_status(Status('mounted', '/demo/new', True))
+            self.assertFalse(window.buttons['settings'].isEnabled())
+            from drive_manager.transfers import Progress, Transfer
+            window.show_status(Status('mounted', '/demo/new', True, True, 1, Progress('uploading', 0, 1, 0, 1024, (Transfer('report.pdf', 43, 2048, 9),))))
+            self.assertEqual(window.transfer_table.item(0,0).text(), 'report.pdf')
+            self.assertEqual(window.transfer_table.item(0,1).text(), '43%')
+            self.assertEqual(window.progress_bar.value(), 43)
+            with patch.object(window.manager, 'begin_authorization', return_value=('temporary', None)) as begin, patch.object(window, 'connection_details') as details:
+                window.add_account()
+                loop = QEventLoop(); QTimer.singleShot(400, loop.quit); loop.exec()
+                begin.assert_called_once()
+                self.assertEqual(begin.call_args.args[2], 'drive')
+                details.assert_called_once_with(('temporary', None))
+                begin.reset_mock(); details.reset_mock()
+                window.provider.setCurrentIndex(2)
+                window.add_account()
+                loop = QEventLoop(); QTimer.singleShot(400, loop.quit); loop.exec()
+                self.assertEqual(begin.call_args.args[2], 'onedrive')
+                details.assert_called_once_with(('temporary', None))
+            from threading import Event
+            window.oauth_cancel = Event()
+            url = 'http://127.0.0.1:53682/auth?state=' + 'a'*22
+            window.oauth_urls.put(url)
+            with patch('drive_manager.app.QDesktopServices.openUrl', return_value=True) as opener:
+                window.tick()
+                self.assertTrue(window.buttons['oauth_open'].isEnabled())
+                self.assertEqual(opener.call_args.args[0].toString(), url)
+                window.open_authorization()
+                self.assertEqual(opener.call_count, 2)
+            window.cancel_authorization()
+            window.pool.shutdown()
+            window.timer.stop()
+            window.tray.hide()
+            window.hide()
