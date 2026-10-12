@@ -30,8 +30,8 @@ TEXT = {
 'uploads_pending':'Pending changes remain. Wait for uploads, or reconnect in read/write mode to recover them.',
 'uploads_unknown':'Cannot verify pending changes. Disconnect and deletion are blocked.',
 'files_open':'Close files and Dolphin windows on this drive before disconnecting.',
-'needs_write_auth':'This account was authorized for reading. Add it again using New connection in read/write mode.',
-'write_note':'Read/write changes your cloud files. Existing read-only Google/Microsoft accounts need a new authorization.',
+'needs_write_auth':'This account was authorized for reading. Enable read/write in account settings to authorize access.',
+'write_note':'Read/write changes your cloud files. Google/Microsoft may ask you to authorize write access in your browser.',
 'provider':'Provider for new connection', 'email':'Email', 'password':'Password', 'twofa':'Internxt two-factor code',
 'internxt_error':'Internxt login failed. Check credentials, two-factor code and plan compatibility.',
 'wallet_error':'Unlock or create the KDE wallet named kdewallet, then retry.',
@@ -71,7 +71,7 @@ TEXT = {
 'uploads_pending':'Quedan cambios pendientes. Espera las subidas o vuelve a conectar en escritura para recuperarlos.',
 'uploads_unknown':'No se pueden verificar los cambios pendientes. Se bloquea desconectar y eliminar.',
 'files_open':'Cierra los archivos y ventanas de Dolphin de esta unidad antes de desconectar.',
-'needs_write_auth':'Esta cuenta se autorizó para lectura. Añádela de nuevo con Nueva conexión en modo lectura/escritura.',
+'needs_write_auth':'Esta cuenta se autorizó para lectura. Activa lectura/escritura en los ajustes de la cuenta para autorizar el acceso.',
 'write_note':'Lectura/escritura modifica archivos de la nube. Las cuentas Google/Microsoft autorizadas solo para lectura requieren una nueva autorización.',
 'provider':'Proveedor de la nueva conexión', 'email':'Correo', 'password':'Contraseña', 'twofa':'Código de dos factores de Internxt',
 'internxt_error':'Falló el acceso a Internxt. Comprueba credenciales, código de dos factores y compatibilidad del plan.',
@@ -100,11 +100,13 @@ TEXT = {
 'starting':'Iniciando / reconectando', 'unmounted':'Desmontado', 'failed':'Montaje fallido'}}
 
 TEXT['en'].update({
+    'upgrade_confirm': 'Allow this connection to modify your cloud files? Your browser will open to authorize read/write access. Sign in with the SAME account. Cancelling keeps the current mode.',
     'reauth': 'Reauthorize account',
     'reauth_confirm': 'Sign in with the SAME account as this connection. Its folder, cache and settings will be kept. The connection must be disconnected, with no pending uploads. Continue?',
     'reauth_error': 'Could not renew authorization. Use a disconnected Google Drive or OneDrive connection created by this app, without custom OAuth credentials. The original connection has been preserved.',
     'reauth_identity': 'The selected OneDrive belongs to another drive. The original connection has been preserved.'})
 TEXT['es'].update({
+    'upgrade_confirm': '¿Permitir que esta conexión modifique tus archivos en la nube? Se abrirá el navegador para autorizar lectura/escritura. Inicia sesión con la MISMA cuenta. Cancelar conserva el modo actual.',
     'reauth': 'Reautorizar cuenta',
     'reauth_confirm': 'Inicia sesión con la MISMA cuenta de esta conexión. Se conservarán su carpeta, caché y ajustes. Debe estar desconectada y sin subidas pendientes. ¿Continuar?',
     'reauth_error': 'No se pudo renovar la autorización. Usa una conexión Google Drive o OneDrive creada por esta aplicación, desconectada y sin credenciales OAuth personalizadas. Se conserva la conexión original.',
@@ -368,9 +370,40 @@ class Window(QMainWindow):
             self.timer.start(250)
         if accepted:
             updated = Preferences(path.text().strip(), size.value(), age.value(), automount.isChecked(), writable.isChecked())
-            self.submit(lambda: self.manager.save_preferences(remote, updated), self.show_status, "prefs_error")
+            self.save_account_preferences(remote, updated)
         else:
             self.poll()
+
+    def save_account_preferences(self, remote, prefs):
+        def save():
+            try:
+                return self.manager.save_preferences(remote, prefs)
+            except OperationError as error:
+                if str(error) == 'needs_write_auth' and self.manager.is_app_account(remote):
+                    return None
+                raise
+        def saved(status):
+            if status is not None:
+                self.show_status(status)
+                return
+            if QMessageBox.question(self, self.t['reauth'], self.t['upgrade_confirm'],
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+                self.poll()
+                return
+            from threading import Event
+            cancel = Event(); self.oauth_cancel = cancel
+            self.browser_url = None
+            while not self.oauth_urls.empty(): self.oauth_urls.get_nowait()
+            self.label.setText(self.t['auth_wait'])
+            def authorize_and_save():
+                self.manager.reauthorize(remote, cancel, self.oauth_urls.put,
+                    self.ask_onedrive_drive, confirmed=True, request_write=True)
+                # Mode remains read-only until all preference checks succeed.
+                if cancel.is_set(): raise OperationError('reauth_error')
+                return self.manager.save_preferences(remote, prefs)
+            self.submit(authorize_and_save, self.show_status, 'reauth_error')
+        self.submit(save, saved, 'prefs_error')
 
     def ask_internxt_code(self, cancel):
         from threading import Event

@@ -25,3 +25,21 @@ de ajustes y opciones, permisos 0600, cancelación, fallo, confirmación explíc
 rechazo de cuentas externas, montajes activos, subidas pendientes, montajes que
 aparecen durante OAuth y selección de otra unidad OneDrive. La autenticación real
 necesita una comprobación manual por el titular de la cuenta.
+
+## Pasar a lectura/escritura (1.9.0)
+
+Desconecta la cuenta, abre **Ajustes**, activa **Lectura/escritura** y guarda.
+Si faltan permisos, Drive Manager pide confirmación y abre el navegador para
+ampliar la autorización de esa misma cuenta. No hay que crear otra conexión.
+Cancelar o fallar la autorización conserva el modo anterior. OneDrive mantiene
+la comprobación de identidad; en Google debes escoger la misma cuenta.
+
+Los permisos se validan antes de sustituir las credenciales. El montaje sigue
+siendo de solo lectura hasta que se hayan guardado los ajustes. Si tras autorizar
+falla el guardado de ajustes (por ejemplo, porque aparece un montaje externo),
+la autorización nueva se conserva pero el modo anterior permanece. Desconecta
+la cuenta y vuelve a guardar los ajustes. No se desmonta automáticamente.
+
+Volver a solo lectura bloquea las escrituras del montaje; no revoca los permisos
+OAuth concedidos. Las conexiones externas conservan su configuración original;
+si requieren más permisos hay que gestionarlos con su herramienta original.

@@ -224,3 +224,8 @@ Fuente: [estadísticas de transferencias de Rclone](https://rclone.org/rc/#core-
 
 Reautorizar cuentas Google Drive y OneDrive conservando carpeta y ajustes.
 Consulta [las garantías y limitaciones](docs/REAUTHORIZATION.md).
+
+## Versión 1.9.0
+
+Activa lectura/escritura en los ajustes de una cuenta existente. Si faltan permisos,
+se solicita autorización mediante navegador sin duplicar la conexión.

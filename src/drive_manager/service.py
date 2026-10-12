@@ -74,7 +74,7 @@ class Manager:
                 raise OperationError("Authorization cancelled")
             return remote, staged
 
-    def reauthorize(self, remote, cancel, on_url, ask_drive=None, confirmed=False):
+    def reauthorize(self, remote, cancel, on_url, ask_drive=None, confirmed=False, request_write=False):
         """Replace only OAuth credentials after explicit same-account confirmation.
 
         External configurations and Internxt credentials are outside this workflow.
@@ -101,7 +101,7 @@ class Manager:
             # Custom OAuth clients need their own authorization flow.
             if any(old.get(remote, key, fallback='') for key in ('client_id', 'client_secret', 'service_account_file')):
                 raise OperationError('reauth_error')
-            writable = self.settings.load(remote).writable
+            writable = request_write or self.settings.load(remote).writable
             if provider == 'drive':
                 writable = writable or old.get(remote, 'scope', fallback='drive') in {'drive', 'drive.file'}
                 staged = self.accounts.authorize(remote, cancel, on_url, writable)
@@ -119,6 +119,8 @@ class Manager:
                 if provider == 'onedrive' and any(old.get(remote, key, fallback='') != new.get(remote, key, fallback='')
                                                 for key in ('drive_id', 'drive_type')):
                     raise OperationError('reauth_identity')
+                if request_write:
+                    self.ensure_write_permission(remote, staged)
                 # Keep root-folder, backend options, and every application preference.
                 for key in ('token', 'scope' if provider == 'drive' else 'access_scopes'):
                     if new.has_option(remote, key):

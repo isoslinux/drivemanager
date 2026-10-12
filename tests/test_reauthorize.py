@@ -78,3 +78,46 @@ class ReauthorizationTests(unittest.TestCase):
         with patch('drive_manager.onedrive.authorize',side_effect=wrong):
             with self.assertRaisesRegex(OperationError,'reauth_identity'):self.renew()
         self.assertEqual(self.path.read_bytes(),before)
+    def test_write_upgrade_requests_scope_without_changing_mode(self):
+        from dataclasses import replace
+        self.path.write_text(self.path.read_text()+'scope = drive.readonly\n')
+        def write_scope(name,cancel,on_url,writable):
+            self.assertTrue(writable)
+            staged=self.renewed(name,cancel,on_url,writable)
+            staged.write_text(staged.read_text().replace('drive.readonly','drive'))
+            return staged
+        with patch.object(self.manager.accounts,'authorize',side_effect=write_scope):
+            self.manager.reauthorize(self.remote,Event(),lambda url:None,confirmed=True,request_write=True)
+        self.assertFalse(self.manager.settings.load(self.remote).writable)
+        self.manager.save_preferences(self.remote,replace(self.prefs,writable=True))
+        self.assertTrue(self.manager.settings.load(self.remote).writable)
+        self.assertEqual(self.manager.settings.load(self.remote).mount_path,self.prefs.mount_path)
+    def test_insufficient_new_permissions_preserve_original(self):
+        with patch.object(self.manager.accounts,'authorize',side_effect=self.renewed):
+            with self.assertRaisesRegex(OperationError,'needs_write_auth'):
+                self.manager.reauthorize(self.remote,Event(),None,confirmed=True,request_write=True)
+        self.assertEqual(self.path.read_bytes(),self.original)
+        self.assertEqual(self.manager.settings.load(self.remote),self.prefs)
+    def test_cancelled_write_upgrade_keeps_read_only(self):
+        cancel=Event()
+        def cancel_write(*args):
+            staged=self.renewed(*args);staged.write_text(staged.read_text().replace('drive.readonly','drive'))
+            cancel.set();return staged
+        with patch.object(self.manager.accounts,'authorize',side_effect=cancel_write):
+            with self.assertRaises(OperationError):
+                self.manager.reauthorize(self.remote,cancel,None,confirmed=True,request_write=True)
+        self.assertEqual(self.path.read_bytes(),self.original)
+        self.assertFalse(self.manager.settings.load(self.remote).writable)
+    def test_onedrive_write_upgrade_preserves_drive_and_options(self):
+        self.path.write_text('[personal]\ntype=onedrive\ntoken=OLD\ndrive_id=original\ndrive_type=personal\naccess_scopes=Files.Read offline_access\nchunk_size=20M\n')
+        def auth(accounts,name,cancel,on_url,ask_drive,writable):
+            self.assertTrue(writable)
+            staged=self.fake_oauth(name,cancel)
+            staged.write_text('[personal]\ntype=onedrive\ntoken=NEW\ndrive_id=original\ndrive_type=personal\naccess_scopes=Files.ReadWrite offline_access\n')
+            return staged
+        with patch('drive_manager.onedrive.authorize',side_effect=auth):
+            self.manager.reauthorize(self.remote,Event(),None,confirmed=True,request_write=True)
+        parser=configparser.ConfigParser();parser.read(self.path)
+        self.assertEqual(parser.get(self.remote,'chunk_size'),'20M')
+        self.assertEqual(parser.get(self.remote,'drive_id'),'original')
+        self.assertFalse(self.manager.settings.load(self.remote).writable)
