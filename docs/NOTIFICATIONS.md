@@ -1,38 +1,35 @@
-# Notificaciones de escritorio (1.12.0)
+# Desktop notifications
 
-Drive Manager utiliza las notificaciones nativas de la bandeja de Qt, integradas
-con KDE. Avisa cuando una cola de subidas que ha observado queda vacía, cuando
-la autenticación requiere atención o cuando falla una transferencia.
+Drive Manager uses Qt tray notifications integrated with KDE. It announces an
+observed upload queue becoming empty, authentication requiring attention and
+transfer failures. Messages follow the selected application language.
 
-Activa o desactiva **Notificaciones de escritorio** en la ventana o en el menú de
-la bandeja. El ajuste global se guarda en `~/.config/drive-manager/notifications.json`
-con permisos 0600 y sustitución atómica. Una preferencia ilegible desactiva los
-avisos. Si no se puede guardar, se conserva la elección anterior.
+Enable or disable **Desktop notifications** in the window or tray menu. The global
+preference is saved atomically in `~/.config/drive-manager/notifications.json` with
+0600 permissions. An unreadable preference disables alerts; a failed save preserves
+the previous choice. Clicking a notification displays the main window.
 
-Los avisos identifican la conexión y usan mensajes fijos. No contienen nombres
-de archivos, rutas, credenciales, tokens ni el error bruto de Rclone. Pulsar un
-aviso muestra la ventana principal. KDE puede silenciarlos en su modo No molestar.
+Messages identify the connection and use fixed text. They never include filenames,
+paths, credentials, tokens or Rclone's raw error. KDE may suppress notifications
+with Do Not Disturb or its application notification settings.
 
-## Límites y protección contra repeticiones
+## Event policy
 
-- Se supervisan todas las cuentas de la tabla mientras la aplicación está abierta,
-  aunque esté oculta en la bandeja. No se crea un servicio de notificaciones separado.
-- Solo se anuncia una cola vacía tras haber observado subidas pendientes en un
-  montaje propio de lectura/escritura; no se confunden descargas, montajes externos
-  o una desconexión con una subida completada.
-- Estados desconocidos no anuncian finalización. Una cola vacía no es una prueba
-  independiente de conectividad ni una verificación remota de cada archivo.
-- Cada tipo de error se anuncia una vez por incidente, por cuenta, hasta observar
-  recuperación. Un fallo de red transitorio no genera un aviso adicional.
-- Los eventos ocurridos mientras los avisos están silenciados no se reproducen al
-  volver a activarlos. El historial de deduplicación dura la sesión de la aplicación.
-- No se montan, desmontan ni reautorizan cuentas como respuesta a un aviso. Si hay
-  cambios pendientes, se mantienen los bloqueos existentes de caché y credenciales.
+- All accounts in the table are monitored while the application runs, including
+  while hidden in the tray. No separate notification service is created.
+- Queue-empty alerts require previously observed pending uploads on an owned
+  read/write mount. Downloads, external mounts and disconnects are not completion.
+- Unknown state never announces completion. An empty queue does not independently
+  verify connectivity or integrity of every remote file.
+- Each error type is announced once per account/incident until recovery is observed.
+  Transient network retry does not produce an additional alert.
+- Muted events are consumed and are not replayed when alerts are enabled again.
+  Deduplication history lasts for the application session.
+- Alerts never mount, disconnect, reauthorize or delete accounts. Existing cache
+  and credential protection remains in effect.
 
-## Arquitectura y pruebas
-
-`notifications.py` contiene el seguimiento de transiciones y la preferencia
-privada; `app.py` consume los eventos en el hilo Qt mediante QSystemTrayIcon.
-Las pruebas simulan colas, errores, recuperación, varias cuentas, silencio,
-configuración dañada, enlaces simbólicos y fallo al guardar. La integración
-visual nativa debe comprobarse desde una sesión KDE real.
+Low-space alerts also respect the global preference; see [storage](STORAGE.md).
+`notifications.py` tracks transitions and private preferences; `app.py` presents
+messages on the Qt thread. Tests simulate queues, errors, recovery, multiple
+accounts, mute behavior, corrupted preferences, symlinks and failed-save rollback.
+Native notification presentation requires a normal KDE-session acceptance check.

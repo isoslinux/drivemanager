@@ -1,53 +1,47 @@
-# Espacio por cuenta (1.13.0)
+# Account storage quotas
 
-Al seleccionar una conexión se consulta su cuota en segundo plano y se muestran
-los valores disponibles: usado, libre, total, otros servicios y papelera. La barra
-representa la ocupación del total indicado por el proveedor. Cuando existe el dato
-libre, se calcula a partir de total menos libre; si no existe, utiliza el usado y
-otros servicios informados, sin inventar una cantidad libre ni sumar dos veces
-la papelera. Los tamaños se muestran en unidades binarias (GiB, MiB, etc.).
+Selecting a connection starts a background quota query. Available fields are
+shown separately: used, free, total, other services and trash. Sizes use binary
+units such as GiB and MiB. The capacity bar uses total minus free when available;
+otherwise it uses reported used/other storage without inventing a free value or
+adding trash twice.
 
-En Google la cuota puede incluir otros servicios, como Gmail y Fotos. Se muestran
-por separado cuando Rclone los facilita. La cuenta queda marcada con poco espacio
-cuando queda un 10 % o menos del total informado, o cuando el libre es cero. El
-aviso de escritorio respeta el ajuste global y no se repite hasta observar una
-recuperación. No detiene subidas ni elimina datos.
+Google quotas may include services such as Gmail and Photos. Other-service usage
+is displayed separately when reported by Rclone. Low space means 10% or less of
+reported total remaining, or a known free value of zero. Desktop alerts respect
+the global preference and do not repeat until recovery is observed. No uploads
+are stopped and no data is deleted.
 
-Los resultados se conservan en memoria cinco minutos. **Actualizar espacio**
-fuerza una nueva consulta. Las transferencias y acciones siguen funcionando
-mientras se consulta la cuota. Una respuesta de una cuenta que ya no está seleccionada
-no sustituye los datos visibles de la nueva selección.
+Results are retained in memory for five minutes. **Refresh space** requests fresh
+data. Transfers and actions remain responsive during the separate quota query.
+An old selection's response cannot replace the newly selected account's display.
+Labels and warnings use the selected application language.
 
-Si no hay soporte, faltan datos o falla la consulta se muestra **No disponible**.
-No significa espacio ilimitado ni libre cero. No se cuentan todos los archivos
-como alternativa: eso sería lento y no equivale a consultar la cuota.
+Missing support, unavailable fields or a failed query produce **Not available**.
+Unknown values do not mean unlimited storage or zero free space. The application
+does not traverse every file as a substitute for provider quota information.
 
-## Credenciales y limitaciones
+## Credentials and limits
 
-Las consultas de configuraciones sin cifrar utilizan una copia temporal privada
-con permisos 0600 en una carpeta 0700. Una posible renovación OAuth queda en esa
-copia; la configuración original se conserva y la copia se elimina al terminar.
-No se abre el navegador, se registran tokens ni se cambia ningún servicio.
+Unencrypted configurations are queried through temporary private copies (0600
+files in 0700 directories). Possible OAuth refresh remains in that copy, leaving
+the source untouched. Temporary copies are removed afterwards. No browser is
+opened and no tokens or raw errors are logged.
 
-Las cuentas cifradas creadas por la aplicación (Internxt) se consultan a través del
-socket privado de su montaje activo. Si no están montadas, se muestra No disponible,
-sin abrir KWallet en segundo plano. Las configuraciones externas cifradas y los
-archivos de configuración enlazados no se consultan en esta entrega.
+Encrypted application-created accounts (Internxt) use the private socket of an
+active managed mount. If disconnected, quota is unavailable and KWallet is not
+opened in the background. External encrypted configurations and linked source
+configuration files are not queried in this delivery.
 
-La consulta no verifica las subidas ni la integridad de archivos. Los datos dependen
-del proveedor y pueden actualizarse con retraso.
+Quota queries are not upload-integrity checks. Provider information may lag.
+`quota.py` validates numeric fields and calls `rclone about --json` or private
+`operations/about`; the UI uses a separate worker and memory cache. Quota subprocesses
+have a twelve-second limit and RC connections use ten seconds.
 
-## Arquitectura y pruebas
+Tests cover shared quotas, absent/invalid values, preserved source configuration,
+temporary cleanup, process bounds, disconnected encrypted accounts and Qt selection
+changes. A real synthetic local-backend query was also checked without cloud accounts
+or mounts.
 
-`quota.py` valida campos numéricos y consulta `rclone about --json` o
-`operations/about` sobre un socket privado. La interfaz usa un trabajador separado,
-una caché en memoria y controles Qt. Cada comando de consulta tiene un tiempo
-máximo de doce segundos; la conexión RC tiene un límite de diez segundos.
-
-Las pruebas cubren cuotas compartidas, campos ausentes, valores inválidos,
-conservación de configuración original, limpieza temporal, timeout configurado,
-cuentas cifradas desconectadas y cambios de selección en Qt. Se ha verificado
-además una consulta real a un backend local sintético, sin cuentas de nube ni montajes.
-
-Referencias oficiales: [rclone about](https://rclone.org/commands/rclone_about/) y
+References: [rclone about](https://rclone.org/commands/rclone_about/) and
 [operations/about](https://rclone.org/rc/#operations-about).

@@ -1,32 +1,30 @@
-# Interfaz simplificada (1.11.0)
+# Interface
 
-La barra superior reúne **Nueva conexión**, **Actualizar conexiones** y
-**Diagnóstico**. El proveedor y el modo de las nuevas conexiones se eligen en
-una fila compacta; crear Google Drive o OneDrive sigue abriendo el navegador.
+The top toolbar contains **New connection**, **Refresh connections** and
+**Diagnostics**. Provider and access mode for new connections are selected in a
+compact row. Google Drive and OneDrive registration still opens the browser first.
 
-Selecciona una cuenta y utiliza **Conectar**, **Desconectar** o **Abrir en Dolphin**.
-El botón **Cuenta** ofrece **Ajustes**, **Reautorizar** y **Eliminar conexión**.
-También puedes abrir este menú con el botón derecho sobre una fila: primero se
-selecciona esa cuenta. Si su estado aún es desconocido, sus acciones permanecen
-bloqueadas hasta completar la consulta. Se conservan las confirmaciones de
-eliminación y desconexión y la protección de subidas pendientes y montajes externos.
+Select an account and use **Connect**, **Disconnect** or **Open in Dolphin**.
+The **Account** menu contains settings, reauthorization and connection removal.
+Right-clicking a row selects that account before opening its menu. Unknown account
+state keeps actions disabled until the query completes. Existing confirmations,
+pending-upload protection and external-mount guards remain active.
 
-**Transferencias** permite desplegar o plegar la tabla y la barra de progreso.
-Se abre plegado; plegarlo no detiene el seguimiento. El estado resumido de las
-subidas permanece junto a las acciones principales.
+**Transfers** expands or collapses the transfer table and progress bar. It starts
+collapsed; folding it does not stop monitoring. A summary remains visible beside
+the primary actions. Authorization controls appear only during authorization.
 
-Los botones de cancelar y abrir el navegador aparecen durante la autorización
-y se ocultan al finalizar. No se han cambiado credenciales, configuraciones de
-Rclone ni unidades systemd como parte de esta reorganización visual.
+The language selector offers **Castellano, English, Français and Deutsch**.
+Changing language immediately updates the main window, table headings, account
+menu, tray actions, quota labels and future notifications/dialogs. The choice is
+saved for the next launch. Account selection, access modes and action guards are
+preserved, including while a background operation is busy.
 
-## Implementación y comprobación
+The interface uses native Qt widgets. Platform-owned file pickers, Dolphin and
+external browsers may follow their own desktop language. Application messages,
+diagnostic reports and standard confirmation buttons use the selected language.
 
-La distribución se implementa en `app.py` con widgets nativos Qt y acciones de
-menú que reutilizan los controladores existentes. `account_list.py` permite elegir
-la columna que ocupa el ancho disponible: carpeta para cuentas, archivo para
-transferencias. Los estados locales ya consultados permiten actualizar los
-controles al seleccionar otra fila, antes de la siguiente consulta periódica.
-
-Las pruebas Qt comprueban selección de cuenta, bloqueo de acciones externas,
-plegado, controles OAuth y conservación de las acciones previas. Las capturas
-se han revisado con cuatro cuentas sintéticas, sin montar unidades reales.
+Implementation is in `app.py`; catalogs and persistence are in `i18n.py` and
+`messages*.py`. `account_list.py` uses the mount-folder column as the flexible
+account column and the filename column for transfers. Qt tests cover selection,
+menus, OAuth controls, collapse behavior and language switching.

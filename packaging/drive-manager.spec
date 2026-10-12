@@ -1,7 +1,7 @@
 Name:           drive-manager
-Version:        1.13.0
+Version:        1.14.0
 Release:        1%{?dist}
-Summary:        Google Drive desktop mount manager for KDE
+Summary:        Multi-account cloud drive desktop manager for KDE
 License:        MIT
 Source0:        %{name}-%{version}.tar.gz
 BuildArch:      noarch
@@ -18,8 +18,9 @@ Requires:       dolphin
 Requires:       kf6-kwallet
 
 %description
-PySide6 interface for discovering existing Google Drive connections and managing
-read-only FUSE mounts through transient systemd user services.
+Native PySide6 interface for Google Drive, Internxt and OneDrive connections,
+with explicit read/write modes and transient user systemd mounts. Includes
+Spanish, English, French and German application languages.
 
 %prep
 %autosetup
@@ -46,6 +47,9 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src %{python3} -m unittest discover -s test
 %{_datadir}/applications/drive-manager.desktop
 
 %changelog
+* Tue Oct 13 2026 Drive Manager contributors - 1.14.0-1
+- Add four live application languages and English project documentation
+
 * Tue Oct 13 2026 Drive Manager contributors - 1.13.0-1
 - Add asynchronous per-account quotas and low-space warnings
 

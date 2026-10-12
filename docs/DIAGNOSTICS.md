@@ -1,32 +1,26 @@
-# Diagnóstico local (1.10.0)
+# Local diagnostics
 
-Pulsa **Diagnóstico**, incluso si todavía no tienes ninguna cuenta. La aplicación
-consulta Rclone, FUSE 3, el acceso a `/dev/fuse`, systemd de usuario y la presencia
-de Dolphin, systemd-run, fuser y kwallet-query. Los componentes ausentes muestran
-el paquete que debes instalar. El mínimo de Rclone es 1.73.
+Select **Diagnostics**, even when no accounts are configured. The application
+checks Rclone, FUSE 3, `/dev/fuse`, user systemd and the presence of systemd-run,
+Dolphin, fuser and kwallet-query. Missing components show the relevant package.
+The minimum Rclone version is 1.73.
 
-Si hay una cuenta seleccionada, se comprueba su montaje local y la caché de
-escritura. Los montajes externos no se consideran gestionados ni se afirma que
-su cola de subidas esté vacía. Un estado de caché desconocido requiere atención.
-No se prueba la conectividad con la nube ni la vigencia de los permisos OAuth.
+A selected account adds local mount and write-cache checks. External mounts are
+not treated as managed, and their queue is not claimed empty. Unknown cache state
+requires attention. Diagnostics do not test cloud connectivity or OAuth validity.
 
-**Copiar informe** copia exactamente el texto visible al portapapeles para poder
-compartirlo. No lo envía automáticamente. El informe contiene mensajes fijos y
-versiones numéricas verificadas; no incluye cuentas, correos, rutas personales,
-nombres de archivos, tokens, contraseñas, salida bruta de comandos ni registros.
+**Copy report** copies exactly the visible report to the clipboard. It is never
+sent automatically. Reports contain fixed messages and validated numeric versions,
+without account names, emails, personal paths, filenames, credentials, raw command
+output or logs. Reports use the selected application language.
 
-## Arquitectura y pruebas
+`diagnostics.py` contains immutable models and read-only checks; `Probe` uses fixed
+commands, a four-second timeout per probe and discarded stderr. `app.py` runs checks
+in the existing worker and shows a read-only dialog. Tests cover missing programs,
+old versions, timeouts, unexpected output, synthetic secrets, pending/unknown cache,
+external mounts, FUSE access and visible-report/clipboard equality.
 
-- `diagnostics.py`: modelos inmutables, comprobaciones de lectura y catálogo ES/EN.
-- `Probe`: comandos fijos, cuatro segundos de espera por comando y stderr descartado.
-- `app.py`: ejecuta el diagnóstico en el trabajador existente y presenta una ventana
-  de solo lectura; la copia requiere pulsar el botón.
-- Las pruebas cubren componentes ausentes, versiones antiguas, espera agotada,
-  respuestas inesperadas, datos secretos sintéticos, caché pendiente/desconocida,
-  montajes externos, permisos FUSE y correspondencia entre informe visible y copia.
-
-No se abre KWallet, no se instalan paquetes ni se modifican credenciales o servicios.
-Una sesión restringida, contenedor o sandbox puede impedir usar FUSE o acceder al
-bus de systemd; comprueba también desde la sesión KDE normal antes de concluir que
-falla la instalación. La presencia de kwallet-query no comprueba si la cartera
-está desbloqueada.
+Diagnostics never open KWallet, install packages or change services. A restricted
+session or sandbox may deny FUSE/user-bus access; also check from a normal KDE session
+before concluding that installation failed. The presence of kwallet-query does not
+establish that the wallet is unlocked.

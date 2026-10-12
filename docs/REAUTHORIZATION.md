@@ -1,45 +1,37 @@
-# Reautorizar cuentas (1.8.0)
+# Reauthorization and access modes
 
-Selecciona una conexión Google Drive o OneDrive creada por Drive Manager,
-desconéctala y pulsa **Reautorizar cuenta**. Confirma e inicia sesión en el
-navegador con la misma cuenta. No se desmontan unidades automáticamente.
+Select an application-created Google Drive or OneDrive connection, disconnect it,
+and choose **Account → Reauthorize account**. Confirm and sign in with the same
+account. No mounts are automatically stopped to perform authorization.
 
-Se conservan nombre, carpeta, caché, montaje automático, modo de acceso y opciones
-del backend. Las credenciales nuevas se guardan en un archivo temporal privado y
-sustituyen las anteriores de forma atómica únicamente al completar el proceso.
-Cancelar, fallar o detectar un montaje concurrente conserva la conexión anterior.
-OneDrive rechaza una unidad con un identificador o tipo distinto.
+Name, folder, cache, login mounting, access mode and backend options are preserved.
+New credentials are staged privately and atomically replace the old configuration
+only after successful authorization. Cancellation, failure or a concurrent mount
+preserves the previous connection. OneDrive rejects a different drive identifier
+or drive type.
 
-Google Drive requiere que el usuario elija la misma cuenta: esta versión no
-comprueba automáticamente su identidad. No uses este botón para cambiar de cuenta;
-crea una conexión independiente con otra carpeta.
+Google requires the user to choose the same account; identity is not independently
+verified in this workflow. To use another account, create an independent connection
+with its own folder. Pending writes or unknown cache state block reauthorization.
+Internxt, external configurations and custom OAuth clients are not supported by
+this renewal workflow.
 
-Se bloquea la renovación con escrituras pendientes o caché de estado desconocido.
-Internxt, conexiones externas y clientes OAuth personalizados no están incluidos
-en esta entrega. No se modifica el rclone.conf existente ni se registran tokens.
+## Enable read/write on an existing account
 
-## Pruebas
+Disconnect the account, open settings, enable **Read/write**, and save. If permissions
+are missing, the application asks for confirmation and opens the browser to authorize
+write access to the same account. A duplicate connection is not required.
 
-La suite usa credenciales sintéticas y servicios simulados. Verifica conservación
-de ajustes y opciones, permisos 0600, cancelación, fallo, confirmación explícita,
-rechazo de cuentas externas, montajes activos, subidas pendientes, montajes que
-aparecen durante OAuth y selección de otra unidad OneDrive. La autenticación real
-necesita una comprobación manual por el titular de la cuenta.
+Cancellation or failed OAuth preserves the previous mode. Permissions are checked
+before credentials are promoted. The mount mode remains unchanged until preferences
+are successfully saved. If preference saving fails after authorization, the new
+credentials remain available but the old mode is retained; resolve the mount or
+folder problem and save again.
 
-## Pasar a lectura/escritura (1.9.0)
+Returning to read-only prevents mount writes but does not revoke granted OAuth
+permissions. External configurations retain their original credentials; use their
+original tool if additional permissions are required.
 
-Desconecta la cuenta, abre **Ajustes**, activa **Lectura/escritura** y guarda.
-Si faltan permisos, Drive Manager pide confirmación y abre el navegador para
-ampliar la autorización de esa misma cuenta. No hay que crear otra conexión.
-Cancelar o fallar la autorización conserva el modo anterior. OneDrive mantiene
-la comprobación de identidad; en Google debes escoger la misma cuenta.
-
-Los permisos se validan antes de sustituir las credenciales. El montaje sigue
-siendo de solo lectura hasta que se hayan guardado los ajustes. Si tras autorizar
-falla el guardado de ajustes (por ejemplo, porque aparece un montaje externo),
-la autorización nueva se conserva pero el modo anterior permanece. Desconecta
-la cuenta y vuelve a guardar los ajustes. No se desmonta automáticamente.
-
-Volver a solo lectura bloquea las escrituras del montaje; no revoca los permisos
-OAuth concedidos. Las conexiones externas conservan su configuración original;
-si requieren más permisos hay que gestionarlos con su herramienta original.
+Tests cover preserved options/preferences, private permissions, cancellation,
+failures, explicit confirmation, external/active accounts, dirty caches, concurrent
+mounts, incorrect OneDrive identity and write-scope upgrades.

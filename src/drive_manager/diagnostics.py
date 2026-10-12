@@ -81,6 +81,10 @@ CATALOG = {
     },
 }
 
+from .messages_fr import DIAGNOSTICS as FRENCH
+from .messages_de import DIAGNOSTICS as GERMAN
+CATALOG.update(fr=FRENCH, de=GERMAN)
+
 def collect(manager, remote='', probe=None, which=shutil.which, device=Path('/dev/fuse'), access=os.access):
     """The report contains fixed keys and validated numeric versions only."""
     probe = probe or Probe()
@@ -142,8 +146,8 @@ def collect(manager, remote='', probe=None, which=shutil.which, device=Path('/de
         checks.append(Check('uploads','warning','unknown'))
     return Report(tuple(checks))
 
-def format_report(report, language='es'):
-    t = CATALOG['en' if language=='en' else 'es']
+def format_report(report, language='en'):
+    t = CATALOG.get(language, CATALOG['en'])
     lines = [t['title']+' · '+__version__, '']
     for check in report.checks:
         # Unknown values cannot introduce raw output, even from an injected report.

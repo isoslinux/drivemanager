@@ -16,111 +16,18 @@ from .providers import PROVIDERS
 from .account_list import AccountList
 from . import __version__
 
-TEXT = {
-'en': {'title':'Drive Manager '+__version__, 'refresh':'Refresh connections', 'mount':'Connect',
-'unmount':'Disconnect', 'open':'Open in Dolphin', 'quit':'Quit application', 'oauth_open':'Open authorization browser', 'oauth_port':'Another authorization is using port 53682. Close it or cancel it and retry.',
-'oauth_server':'Could not start the local authorization server.',
-'onedrive_error':'Could not configure OneDrive. Check Microsoft permissions and selected drive.',
-'choose_drive':'Choose your OneDrive drive', 'first_transfer':'First transfer', 'queued_label':'Queued','uploading_label':'Uploading', 'transfers':'Transfers', 'uploading':'Uploading changes', 'queued':'Waiting to upload',
- 'transferring':'Transferring files', 'idle':'Queue empty · Cloud connectivity not checked',
- 'network_retry':'Network error · Retrying transfers', 'auth_required':'Authentication needs attention',
- 'transfer_error':'Transfer error · Changes remain pending', 'monitor_unknown':'Cannot verify synchronization',
- 'unmonitored':'Mounted locally · Synchronization not monitored', 'provider_column':'Provider','account':'Account','status':'Status','access':'Access', 'mode':'Mode for new connections', 'mode_ro':'Read only', 'mode_rw':'Read/write',
-'mounted_rw':'Mounted (read/write)', 'sync_pending':'Changes uploading or pending',
-'sync_unknown':'Upload status could not be verified', 'sync_clean':'Upload queue empty',
-'uploads_pending':'Pending changes remain. Wait for uploads, or reconnect in read/write mode to recover them.',
-'uploads_unknown':'Cannot verify pending changes. Disconnect and deletion are blocked.',
-'files_open':'Close files and Dolphin windows on this drive before disconnecting.',
-'needs_write_auth':'This account was authorized for reading. Enable read/write in account settings to authorize access.',
-'write_note':'Read/write changes your cloud files. Google/Microsoft may ask you to authorize write access in your browser.',
-'provider':'Provider for new connection', 'email':'Email', 'password':'Password', 'twofa':'Internxt two-factor code',
-'internxt_error':'Internxt login failed. Check credentials, two-factor code and plan compatibility.',
-'wallet_error':'Unlock or create the KDE wallet named kdewallet, then retry.',
-'internxt_wait':'Connecting to Internxt. Unlock KDE Wallet if requested.',
-'name_error':'Use a unique name starting with a letter, with only letters, numbers, hyphens or underscores.',
-'folder_error':'Choose an empty, separate folder inside your home directory, without symlinks.',
-'browser_error':'The browser could not be opened. Check your default browser and retry the button.',
-'add':'New connection', 'cancel_oauth':'Cancel authorization', 'name':'Account name',
-'oauth_note':'Account authenticated. Choose its name and an empty folder.',
-'auth_wait':'Complete authorization in your browser (up to 10 minutes).',
-'auth_error':'Could not add account. Check unique name and empty, separate home folder; authorization may have been cancelled.',
-'automount':'Mount this account at login', 'settings':'Account settings', 'path':'Mount folder',
-'cache_size':'Cache target (GiB)', 'cache_age':'Keep unused cache (hours)',
-'choose':'Choose folder', 'prefs_note':'Applies on next mount. Cache size is a cleanup target.',
-'prefs_error':'Cannot save. Use an empty folder inside your home, without symlinks or account overlap.',
-'note':'Independent accounts · Choose access mode per account',
-'confirm':'Disconnect this account? Open files may stop working.',
-'disable_auto':'Also disable mounting at login', 'delete':'Delete connection',
-'delete_own':'Delete {name}? Its managed mount will be disconnected and saved credentials removed. Google Drive files are preserved.',
-'delete_external':'{name} belongs to the existing Rclone configuration. Deleting it modifies that configuration and affects other tools. Google Drive files are preserved.',
-'delete_error':'Cannot delete: disconnect external or busy mounts first. Check access to the connection configuration.',
-'external_origin':'Existing Rclone connection', 'app_origin':'Drive Manager account',
-'error':'Operation failed', 'empty':'No connections found',
-'busy':'Working…', 'mounted':'Mounted (read-only)', 'external':'External mount/service',
-'starting':'Starting / reconnecting', 'unmounted':'Unmounted', 'failed':'Mount failed'},
-'es': {'title':'Drive Manager '+__version__, 'refresh':'Actualizar conexiones', 'mount':'Conectar',
-'unmount':'Desconectar', 'open':'Abrir en Dolphin', 'quit':'Salir de la aplicación', 'oauth_open':'Abrir navegador para autorizar', 'oauth_port':'Otra autorización ocupa el puerto 53682. Ciérrala o cancélala y vuelve a intentarlo.',
-'oauth_server':'No se pudo iniciar el servidor local de autorización.',
-'onedrive_error':'No se pudo configurar OneDrive. Comprueba permisos de Microsoft y unidad elegida.',
-'choose_drive':'Elige tu unidad de OneDrive', 'first_transfer':'Primera transferencia', 'queued_label':'En espera','uploading_label':'Subiendo', 'transfers':'Transferencias', 'uploading':'Subiendo cambios', 'queued':'Esperando subida',
- 'transferring':'Transfiriendo archivos', 'idle':'Cola vacía · Conectividad con la nube no comprobada',
- 'network_retry':'Error de red · Reintentando transferencias', 'auth_required':'La autenticación requiere atención',
- 'transfer_error':'Error de transferencia · Quedan cambios pendientes', 'monitor_unknown':'No se puede verificar la sincronización',
- 'unmonitored':'Montado localmente · Sin supervisión de sincronización', 'provider_column':'Proveedor','account':'Cuenta','status':'Estado','access':'Acceso', 'mode':'Modo de las nuevas conexiones', 'mode_ro':'Solo lectura', 'mode_rw':'Lectura/escritura',
-'mounted_rw':'Montado (lectura/escritura)', 'sync_pending':'Cambios subiendo o pendientes',
-'sync_unknown':'No se pudo verificar el estado de las subidas', 'sync_clean':'Cola de subidas vacía',
-'uploads_pending':'Quedan cambios pendientes. Espera las subidas o vuelve a conectar en escritura para recuperarlos.',
-'uploads_unknown':'No se pueden verificar los cambios pendientes. Se bloquea desconectar y eliminar.',
-'files_open':'Cierra los archivos y ventanas de Dolphin de esta unidad antes de desconectar.',
-'needs_write_auth':'Esta cuenta se autorizó para lectura. Activa lectura/escritura en los ajustes de la cuenta para autorizar el acceso.',
-'write_note':'Lectura/escritura modifica archivos de la nube. Las cuentas Google/Microsoft autorizadas solo para lectura requieren una nueva autorización.',
-'provider':'Proveedor de la nueva conexión', 'email':'Correo', 'password':'Contraseña', 'twofa':'Código de dos factores de Internxt',
-'internxt_error':'Falló el acceso a Internxt. Comprueba credenciales, código de dos factores y compatibilidad del plan.',
-'wallet_error':'Desbloquea o crea la cartera KDE llamada kdewallet y vuelve a intentarlo.',
-'internxt_wait':'Conectando a Internxt. Desbloquea KWallet si lo solicita.',
-'name_error':'Usa un nombre único que empiece por una letra, solo con letras, números, guiones o guiones bajos.',
-'folder_error':'Elige una carpeta vacía e independiente dentro de tu directorio personal, sin enlaces simbólicos.',
-'browser_error':'No se pudo abrir el navegador. Comprueba el navegador predeterminado y reintenta con el botón.',
-'add':'Nueva conexión', 'cancel_oauth':'Cancelar autorización', 'name':'Nombre de la cuenta',
-'oauth_note':'Cuenta autenticada. Elige su nombre y una carpeta vacía.',
-'auth_wait':'Completa la autorización en el navegador (hasta 10 minutos).',
-'auth_error':'No se pudo añadir. Comprueba nombre único y carpeta vacía e independiente; la autorización puede haberse cancelado.',
-'automount':'Montar esta cuenta al iniciar sesión', 'settings':'Ajustes de la cuenta', 'path':'Carpeta de montaje',
-'cache_size':'Objetivo de caché (GiB)', 'cache_age':'Conservar caché sin uso (horas)',
-'choose':'Elegir carpeta', 'prefs_note':'Se aplica al próximo montaje. El tamaño es un objetivo de limpieza.',
-'prefs_error':'No se pudo guardar. Usa una carpeta vacía dentro de tu directorio personal, sin enlaces ni solapamientos.',
-'note':'Cuentas independientes · Modo de acceso por cuenta',
-'confirm':'¿Desconectar esta cuenta? Los archivos abiertos pueden dejar de funcionar.',
-'disable_auto':'Desactivar también el montaje al iniciar sesión', 'delete':'Eliminar conexión',
-'delete_own':'¿Eliminar {name}? Se desconectará su montaje propio y se retirarán las credenciales guardadas. Los archivos de Google Drive se conservan.',
-'delete_external':'{name} pertenece a la configuración existente de Rclone. Eliminarla modifica esa configuración y afecta a otras herramientas. Los archivos de Google Drive se conservan.',
-'delete_error':'No se pudo eliminar: desmonta primero los montajes externos u ocupados y comprueba el acceso a la configuración.',
-'external_origin':'Conexión existente de Rclone', 'app_origin':'Cuenta de Drive Manager',
-'error':'La operación ha fallado', 'empty':'No hay conexiones guardadas',
-'busy':'Procesando…', 'mounted':'Montado (solo lectura)', 'external':'Montaje/servicio externo',
-'starting':'Iniciando / reconectando', 'unmounted':'Desmontado', 'failed':'Montaje fallido'}}
-
-TEXT['en'].update({
-    'capacity': 'Storage', 'quota_refresh': 'Refresh space', 'quota_loading': 'Checking storage…', 'quota_unknown': 'Storage: Not available', 'quota_used': 'Used', 'quota_free': 'Available', 'quota_total': 'Total', 'quota_other': 'Other services', 'quota_trash': 'Trash', 'quota_low': 'Low available space', 'notifications': 'Desktop notifications', 'notification_settings_error': 'Could not save notification preference.', 'uploads_done': 'Observed upload queue is now empty.', 'notice_auth': 'Authentication needs attention. Open the app and reauthorize this account when safe.', 'notice_error': 'A transfer failed. Keep the connection and cache while changes remain pending.', 'file_name': 'File', 'account_menu': 'Account', 'diagnostics': 'Diagnostics', 'copy_report': 'Copy report', 'close_report': 'Close',
-    'upgrade_confirm': 'Allow this connection to modify your cloud files? Your browser will open to authorize read/write access. Sign in with the SAME account. Cancelling keeps the current mode.',
-    'reauth': 'Reauthorize account',
-    'reauth_confirm': 'Sign in with the SAME account as this connection. Its folder, cache and settings will be kept. The connection must be disconnected, with no pending uploads. Continue?',
-    'reauth_error': 'Could not renew authorization. Use a disconnected Google Drive or OneDrive connection created by this app, without custom OAuth credentials. The original connection has been preserved.',
-    'reauth_identity': 'The selected OneDrive belongs to another drive. The original connection has been preserved.'})
-TEXT['es'].update({
-    'capacity': 'Espacio', 'quota_refresh': 'Actualizar espacio', 'quota_loading': 'Consultando espacio…', 'quota_unknown': 'Espacio: No disponible', 'quota_used': 'Usado', 'quota_free': 'Disponible', 'quota_total': 'Total', 'quota_other': 'Otros servicios', 'quota_trash': 'Papelera', 'quota_low': 'Poco espacio disponible', 'notifications': 'Notificaciones de escritorio', 'notification_settings_error': 'No se pudo guardar el ajuste de notificaciones.', 'uploads_done': 'La cola de subidas observada ha quedado vacía.', 'notice_auth': 'La autenticación requiere atención. Abre la aplicación y reautoriza esta cuenta cuando sea seguro.', 'notice_error': 'Falló una transferencia. Conserva la conexión y la caché mientras queden cambios pendientes.', 'file_name': 'Archivo', 'account_menu': 'Cuenta', 'diagnostics': 'Diagnóstico', 'copy_report': 'Copiar informe', 'close_report': 'Cerrar',
-    'upgrade_confirm': '¿Permitir que esta conexión modifique tus archivos en la nube? Se abrirá el navegador para autorizar lectura/escritura. Inicia sesión con la MISMA cuenta. Cancelar conserva el modo actual.',
-    'reauth': 'Reautorizar cuenta',
-    'reauth_confirm': 'Inicia sesión con la MISMA cuenta de esta conexión. Se conservarán su carpeta, caché y ajustes. Debe estar desconectada y sin subidas pendientes. ¿Continuar?',
-    'reauth_error': 'No se pudo renovar la autorización. Usa una conexión Google Drive o OneDrive creada por esta aplicación, desconectada y sin credenciales OAuth personalizadas. Se conserva la conexión original.',
-    'reauth_identity': 'La unidad OneDrive seleccionada es distinta. Se conserva la conexión original.'})
+from .i18n import TEXT, LANGUAGES, LanguageSettings, StandardTranslator, install_qt_language
 
 class Window(QMainWindow):
     def __init__(self):
         super().__init__()
-        import locale
-        self.t = TEXT['es' if (locale.getlocale()[0] or '').startswith('es') else 'en']
         self.manager = Manager(Runner())
+        self.language_settings = LanguageSettings(self.manager.home)
+        self.language = self.language_settings.load()
+        self.t = TEXT[self.language]
+        self.qt_translator = install_qt_language(QApplication.instance(), self.language)
+        self.standard_translator = StandardTranslator(self.language, self)
+        QApplication.instance().installTranslator(self.standard_translator)
         from .notifications import Tracker, NotificationSettings
         self.notice_tracker = Tracker()
         self.notification_settings = NotificationSettings(self.manager.home)
@@ -142,7 +49,7 @@ class Window(QMainWindow):
         self.pending_registration = None
         self.auth_write = False
         self.account_states = {}
-        self.setWindowTitle(self.t['title'])
+        self.setWindowTitle(self.t['title']+' '+__version__)
         self.resize(1000, 600)
         body = QWidget(); layout = QVBoxLayout(body); self.setCentralWidget(body)
         self.buttons = {}
@@ -157,18 +64,25 @@ class Window(QMainWindow):
         button('diagnostics', self.diagnose, toolbar)
         layout.addLayout(toolbar)
         connection_options = QHBoxLayout()
-        connection_options.addWidget(QLabel(self.t['provider']))
+        self.provider_label = QLabel(self.t['provider']); connection_options.addWidget(self.provider_label)
         self.provider = QComboBox()
         for provider in PROVIDERS:
             self.provider.addItem(provider.label, provider.key)
             self.provider.model().item(self.provider.count()-1).setEnabled(provider.available)
         connection_options.addWidget(self.provider)
         connection_options.addSpacing(16)
-        connection_options.addWidget(QLabel(self.t['mode']))
-        self.access_mode = QComboBox(); self.access_mode.addItems([self.t['mode_ro'], self.t['mode_rw']])
+        self.mode_label = QLabel(self.t['mode']); connection_options.addWidget(self.mode_label)
+        self.access_mode = QComboBox(); self.access_mode.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents); self.access_mode.addItems([self.t['mode_ro'], self.t['mode_rw']])
         connection_options.addWidget(self.access_mode); connection_options.addStretch()
         layout.addLayout(connection_options)
-        layout.addWidget(QLabel(self.t['note']))
+        language_row = QHBoxLayout()
+        self.note_label = QLabel(self.t['note']); language_row.addWidget(self.note_label)
+        language_row.addStretch()
+        self.language_label = QLabel(self.t['language']); language_row.addWidget(self.language_label)
+        self.language_selector = QComboBox()
+        for key,name in LANGUAGES.items(): self.language_selector.addItem(name,key)
+        self.language_selector.setCurrentIndex(self.language_selector.findData(self.language))
+        language_row.addWidget(self.language_selector); layout.addLayout(language_row)
         self.accounts = AccountList([self.t['account'],self.t['provider_column'],self.t['path'],self.t['access'],self.t['status']])
         layout.addWidget(self.accounts, 1)
         primary = QHBoxLayout()
@@ -218,8 +132,8 @@ class Window(QMainWindow):
         self.accounts.currentIndexChanged.connect(self.selection_changed)
         self.tray = QSystemTrayIcon(QIcon.fromTheme('drive-harddisk'), self)
         menu = QMenu(self)
-        show = QAction(self.t['title'], self); show.triggered.connect(self.showNormal); menu.addAction(show)
-        quit_action = QAction(self.t['quit'], self); quit_action.triggered.connect(self.quit); menu.addAction(quit_action)
+        self.tray_show_action = QAction(self.t['title'], self); self.tray_show_action.triggered.connect(self.showNormal); menu.addAction(self.tray_show_action)
+        self.tray_quit_action = QAction(self.t['quit'], self); self.tray_quit_action.triggered.connect(self.quit); menu.addAction(self.tray_quit_action)
         menu.addSeparator()
         self.notification_action = QAction(self.t['notifications'], self)
         self.notification_action.setCheckable(True)
@@ -233,7 +147,51 @@ class Window(QMainWindow):
         if self.tray.isSystemTrayAvailable(): self.tray.show()
         self.timer = QTimer(self); self.timer.timeout.connect(self.tick); self.timer.start(250)
         self.poll_ticks = 0
+        self.language_selector.currentIndexChanged.connect(self.change_language)
         self.refresh()
+
+    def change_language(self):
+        language = self.language_selector.currentData()
+        if language == self.language: return
+        try: self.language_settings.save(language)
+        except OperationError:
+            self.language_selector.blockSignals(True)
+            self.language_selector.setCurrentIndex(self.language_selector.findData(self.language))
+            self.language_selector.blockSignals(False)
+            self.label.setText(self.t['language_error']); return
+        label_key = next((key for key,value in self.t.items() if value == self.label.text()), None)
+        loading_quota = self.quota_label.text() == self.t['quota_loading']
+        self.language = language; self.t = TEXT[language]
+        self.qt_translator = install_qt_language(QApplication.instance(), language, self.qt_translator)
+        QApplication.instance().removeTranslator(self.standard_translator)
+        self.standard_translator.language = language
+        QApplication.instance().installTranslator(self.standard_translator)
+        self.setWindowTitle(self.t['title']+' '+__version__)
+        for key,control in self.buttons.items(): control.setText(self.t[key])
+        for control,key in [(self.provider_label,'provider'),(self.mode_label,'mode'),(self.note_label,'note'),
+                (self.language_label,'language'),(self.account_menu_button,'account_menu'),
+                (self.transfer_toggle,'transfers'),(self.notification_checkbox,'notifications'),
+                (self.notification_action,'notifications'),(self.tray_show_action,'title'),
+                (self.tray_quit_action,'quit'),(self.quota_refresh,'quota_refresh')]:
+            control.setText(self.t[key])
+        self.access_mode.setItemText(0,self.t['mode_ro']); self.access_mode.setItemText(1,self.t['mode_rw'])
+        self.accounts.setHorizontalHeaderLabels([self.t[key] for key in ('account','provider_column','path','access','status')])
+        self.transfer_table.setHorizontalHeaderLabels([self.t['file_name'],'%','KiB/s','ETA'])
+        for remote,status in self.account_states.items():
+            self.accounts.update_account(remote, next((self.accounts.item(row,1).text() for row in range(self.accounts.rowCount())
+                if self.accounts.item(row,0).text()==remote),''), status.path,
+                '—' if status.state=='external' else self.t['mode_rw' if status.writable else 'mode_ro'],
+                self.t[status.progress.state] if status.progress is not None else self.t['mounted_rw' if status.writable and status.state=='mounted' else status.state])
+        remote = self.accounts.currentText()
+        if label_key is not None: self.label.setText(self.t[label_key])
+        elif remote in self.account_states: self.label.setText(self.status_text(self.account_states[remote]))
+        if remote in self.account_states:
+            status = self.account_states[remote]
+            self.tray.setToolTip(self.t[status.progress.state] if status.progress is not None else self.t[status.state])
+        self.progress_bar.setFormat(self.t['first_transfer']+' %p%')
+        if loading_quota: self.quota_label.setText(self.t['quota_loading'])
+        elif remote in self.quota_cache: self.show_quota(remote,self.quota_cache[remote][1])
+        else: self.quota_label.setText(self.t['quota_unknown'])
 
     def set_notifications(self, enabled):
         previous = self.notifications_enabled
@@ -438,7 +396,7 @@ class Window(QMainWindow):
 
     def show_diagnostics(self, report):
         from .diagnostics import format_report
-        text = format_report(report, 'es' if self.t is TEXT['es'] else 'en')
+        text = format_report(report, self.language)
         dialog = QDialog(self); dialog.setWindowTitle(self.t['diagnostics'])
         dialog.resize(740, 500)
         layout = QVBoxLayout(dialog)
@@ -509,14 +467,8 @@ class Window(QMainWindow):
         self.account_menu_button.setEnabled(bool(self.accounts.currentText()))
         self.accounts.update_account(self.accounts.currentText(), self.accounts.item(self.accounts.currentRow(),1).text(),
             status.path, '—' if status.state=='external' else self.t['mode_rw' if status.writable else 'mode_ro'], self.t[status.progress.state] if status.progress is not None else self.t['mounted_rw' if status.writable and status.state=='mounted' else status.state])
-        origin = 'app_origin' if self.manager.is_app_account(self.accounts.currentText()) else 'external_origin'
-        title = self.t['mounted_rw'] if status.writable and status.state=='mounted' else self.t[status.state]
-        sync = ('\n'+self.t['sync_unknown' if status.pending<0 else 'sync_pending' if status.pending else 'sync_clean']) if status.writable and status.managed else ''
-        detail=status.progress
-        if status.managed and detail is not None:
-            sync='\n'+self.t[detail.state]+f" · {self.t['queued_label']}: {detail.queued} · {self.t['uploading_label']}: {detail.uploading}"
-        elif status.managed: sync='\n'+self.t['unmonitored']
-        self.label.setText(title + ' · ' + self.t[origin] + '\n' + status.path + sync)
+        self.label.setText(self.status_text(status))
+        detail = status.progress
         self.transfer_table.clear();self.progress_bar.hide()
         if detail is not None:
             self.transfer_table.addItems([file.name for file in detail.files])
@@ -539,6 +491,16 @@ class Window(QMainWindow):
         self.buttons['unmount'].setEnabled(status.managed)
         self.buttons['delete'].setEnabled(status.managed or status.state in {'unmounted', 'failed'})
         self.buttons['open'].setEnabled(status.state in {'mounted', 'external'})
+
+    def status_text(self, status):
+        origin = 'app_origin' if self.manager.is_app_account(self.accounts.currentText()) else 'external_origin'
+        title = self.t['mounted_rw'] if status.writable and status.state=='mounted' else self.t[status.state]
+        sync = ('\n'+self.t['sync_unknown' if status.pending<0 else 'sync_pending' if status.pending else 'sync_clean']) if status.writable and status.managed else ''
+        detail=status.progress
+        if status.managed and detail is not None:
+            sync='\n'+self.t[detail.state]+f" · {self.t['queued_label']}: {detail.queued} · {self.t['uploading_label']}: {detail.uploading}"
+        elif status.managed: sync='\n'+self.t['unmonitored']
+        return title + ' · ' + self.t[origin] + '\n' + status.path + sync
 
     def edit_settings(self):
         remote = self.accounts.currentText()
