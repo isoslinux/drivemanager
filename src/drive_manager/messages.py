@@ -253,3 +253,38 @@ TEXT = {'en': {'title': 'Drive Manager',
         'reauth_identity': 'La unidad OneDrive seleccionada es distinta. Se conserva la conexión original.',
         'language': 'Idioma',
         'language_error': 'No se pudo guardar el idioma. Se conserva el anterior.'}}
+
+TEXT['en'].update({'updates': 'Check for updates',
+ 'update_checking': 'Checking updates…',
+ 'update_installed': 'Installed version',
+ 'update_latest': 'Latest stable version',
+ 'update_available': 'An update is available. Download the RPM and install it manually.',
+ 'update_current': 'You have the latest published stable version.',
+ 'update_ahead': 'Your installed version is newer than the latest published stable release.',
+ 'update_error': 'Could not check updates. Check your Internet connection and try again later.',
+ 'update_rate_limit': 'GitHub temporarily limited requests. Try again later.',
+ 'update_rpm_missing': 'No matching Fedora 44 RPM is available. Open the release page to view its '
+                       'files.',
+ 'update_open_rpm': 'Download RPM',
+ 'update_open_release': 'Open release page',
+ 'update_open_error': 'Could not open the default browser.',
+ 'update_manual': 'Installation is manual. This check does not download or run software, change '
+                  'credentials, or interrupt mounts and uploads.'})
+
+TEXT['es'].update({'updates': 'Buscar actualizaciones',
+ 'update_checking': 'Buscando actualizaciones…',
+ 'update_installed': 'Versión instalada',
+ 'update_latest': 'Última versión estable',
+ 'update_available': 'Hay una actualización. Descarga el RPM e instálalo manualmente.',
+ 'update_current': 'Tienes la última versión estable publicada.',
+ 'update_ahead': 'La versión instalada es más reciente que la última entrega estable publicada.',
+ 'update_error': 'No se pudo comprobar. Revisa tu conexión a Internet y vuelve a intentarlo más '
+                 'tarde.',
+ 'update_rate_limit': 'GitHub ha limitado temporalmente las consultas. Inténtalo más tarde.',
+ 'update_rpm_missing': 'No hay un RPM compatible con Fedora 44. Abre la página de la entrega para '
+                       'ver sus archivos.',
+ 'update_open_rpm': 'Descargar RPM',
+ 'update_open_release': 'Abrir página de la entrega',
+ 'update_open_error': 'No se pudo abrir el navegador predeterminado.',
+ 'update_manual': 'La instalación es manual. Esta consulta no descarga ni ejecuta software, no '
+                  'cambia credenciales ni interrumpe montajes o subidas.'})

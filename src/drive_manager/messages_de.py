@@ -80,3 +80,24 @@ DIAGNOSTICS = {
  'clean':'Keine ausstehenden Änderungen im Schreibcache erkannt.',
  'unmonitored':'Externes Laufwerk: Die Upload-Warteschlange kann nicht geprüft werden.',
  'footer':'Lokale Prüfung: Internetzugriff, OAuth-Berechtigungen und Cloud-Verfügbarkeit werden nicht geprüft.\nEnthält keine Tokens, Passwörter, E-Mails, Kontonamen, persönlichen Pfade oder Protokolle.\nÄndert keine Konfiguration und startet oder stoppt keine Dienste.'}
+
+MESSAGES.update({'updates': 'Nach Updates suchen',
+ 'update_checking': 'Updates werden geprüft…',
+ 'update_installed': 'Installierte Version',
+ 'update_latest': 'Neueste stabile Version',
+ 'update_available': 'Ein Update ist verfügbar. Laden Sie das RPM herunter und installieren Sie es '
+                     'manuell.',
+ 'update_current': 'Sie verwenden die neueste veröffentlichte stabile Version.',
+ 'update_ahead': 'Die installierte Version ist neuer als die zuletzt veröffentlichte stabile '
+                 'Version.',
+ 'update_error': 'Updates konnten nicht geprüft werden. Prüfen Sie die Internetverbindung und '
+                 'versuchen Sie es später erneut.',
+ 'update_rate_limit': 'GitHub begrenzt vorübergehend die Anfragen. Versuchen Sie es später erneut.',
+ 'update_rpm_missing': 'Kein passendes RPM für Fedora 44 verfügbar. Öffnen Sie die Release-Seite, '
+                       'um die Dateien anzuzeigen.',
+ 'update_open_rpm': 'RPM herunterladen',
+ 'update_open_release': 'Release-Seite öffnen',
+ 'update_open_error': 'Der Standardbrowser konnte nicht geöffnet werden.',
+ 'update_manual': 'Die Installation erfolgt manuell. Diese Prüfung lädt keine Software herunter '
+                  'und führt sie nicht aus, ändert keine Zugangsdaten und unterbricht keine '
+                  'Laufwerke oder Uploads.'})

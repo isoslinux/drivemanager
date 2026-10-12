@@ -194,3 +194,53 @@ class QuotaUi(unittest.TestCase):
             window.show_quota('work',Quota())
             self.assertEqual(window.quota_label.text(),window.t['quota_unknown'])
             window.timer.stop();window.quota_pool.shutdown();window.pool.shutdown();window.tray.hide();window.hide()
+
+@unittest.skipUnless(os.environ.get('QT_QPA_PLATFORM') == 'offscreen', 'Set QT_QPA_PLATFORM=offscreen for UI smoke')
+class UpdatesUi(unittest.TestCase):
+    def test_manual_background_check_preserves_account_actions(self):
+        from PySide6.QtWidgets import QApplication
+        from PySide6.QtCore import QTimer,QEventLoop
+        from threading import Event
+        from drive_manager.app import Window
+        from drive_manager.service import Status
+        from drive_manager.updates import Update
+        app=QApplication.instance() or QApplication([])
+        with patch('drive_manager.service.Manager.discover_accounts',return_value=['personal']), \
+             patch('drive_manager.service.Manager.provider_of',return_value='drive'), \
+             patch('drive_manager.service.Manager.status',return_value=Status('unmounted','/demo')):
+            window=Window();window.show()
+            loop=QEventLoop();QTimer.singleShot(650,loop.quit);loop.exec()
+            done=Event()
+            def query(installed):done.wait(2);return Update('update_current',installed,installed)
+            with patch('drive_manager.updates.check',side_effect=query) as check,patch.object(window,'show_updates') as shown:
+                before={key:control.isEnabled() for key,control in window.buttons.items()}
+                window.check_updates();window.check_updates()
+                self.assertEqual(before,{key:control.isEnabled() for key,control in window.buttons.items()})
+                self.assertFalse(window.update_button.isEnabled())
+                done.set();loop=QEventLoop();QTimer.singleShot(350,loop.quit);loop.exec()
+                check.assert_called_once();shown.assert_called_once()
+                self.assertTrue(window.update_button.isEnabled())
+            window.timer.stop();window.update_pool.shutdown();window.quota_pool.shutdown();window.pool.shutdown();window.tray.hide();window.hide()
+    def test_browser_download_requires_button_and_keeps_polling_active(self):
+        from PySide6.QtWidgets import QApplication,QPushButton
+        from PySide6.QtCore import QTimer,QEventLoop
+        from drive_manager.app import Window
+        from drive_manager.updates import Update,REPOSITORY
+        app=QApplication.instance() or QApplication([])
+        with patch('drive_manager.service.Manager.discover_accounts',return_value=[]):
+            window=Window();loop=QEventLoop();QTimer.singleShot(350,loop.quit);loop.exec()
+            rpm=REPOSITORY+'/releases/download/v1.16.0/drive-manager-1.16.0-1.fc44.noarch.rpm'
+            observed={}
+            def interact():
+                dialog=app.activeModalWidget()
+                try:
+                    observed['polling']=window.timer.isActive()
+                    observed['before']=opener.call_count
+                    next(b for b in dialog.findChildren(QPushButton) if b.text()==window.t['update_open_rpm']).click()
+                finally:dialog.accept()
+            with patch('drive_manager.app.QDesktopServices.openUrl',return_value=True) as opener:
+                QTimer.singleShot(0,interact)
+                window.show_updates(Update('update_available','1.15.0','1.16.0',REPOSITORY+'/releases/tag/v1.16.0',rpm))
+                self.assertTrue(observed['polling']);self.assertEqual(observed['before'],0)
+                opener.assert_called_once();self.assertEqual(opener.call_args.args[0].toString(),rpm)
+            window.timer.stop();window.update_pool.shutdown();window.quota_pool.shutdown();window.pool.shutdown();window.tray.hide();window.hide()

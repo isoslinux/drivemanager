@@ -13,7 +13,7 @@ Download the `noarch.rpm` from [GitHub Releases](https://github.com/isoslinux/dr
 and open it with Discover, or install/update it from your download folder:
 
 ```bash
-sudo dnf install ./drive-manager-1.14.0-1.fc44.noarch.rpm
+sudo dnf install ./drive-manager-1.15.0-1.fc44.noarch.rpm
 ```
 
 Launch **Drive Manager** from the KDE application menu, as your normal user.
@@ -31,6 +31,8 @@ files are never included in this repository or the release package.
 - **Diagnostics** checks dependencies and local state with a copyable safe report.
 - Select an account to query its storage quota. **Refresh space** requests fresh data.
 - Select a language near the top of the window. Changes apply immediately and persist.
+- **Check for updates** compares the installed version with the latest stable GitHub release.
+  Downloading and installing the RPM remain manual.
 
 Closing the window hides it when a tray is available. **Quit application** leaves
 mounts running until the user session ends. Mounting at login is optional; linger
@@ -79,6 +81,7 @@ active managed mount for quota queries; background queries never unlock KWallet.
 - [Notifications](docs/NOTIFICATIONS.md)
 - [Storage quotas](docs/STORAGE.md)
 - [Languages and translation maintenance](translations/README.md)
+- [Update checks](docs/UPDATES.md)
 - [Test plan](docs/testing.md) and [validation scope](docs/validation.md)
 
 ```bash
@@ -93,6 +96,7 @@ in the account owner's desktop session. See the validation document for the scop
 
 | Version | Main change |
 | --- | --- |
+| 1.15.0 | Manual update checks with safe release/RPM links |
 | 1.14.0 | English project documentation and four selectable application languages |
 | 1.13.0 | Account quotas and low-space warnings |
 | 1.12.0 | Deduplicated desktop notifications and persistent mute controls |

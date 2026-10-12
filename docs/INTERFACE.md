@@ -1,7 +1,7 @@
 # Interface
 
 The top toolbar contains **New connection**, **Refresh connections** and
-**Diagnostics**. Provider and access mode for new connections are selected in a
+**Diagnostics**, plus a manual **Check for updates** action. Provider and access mode for new connections are selected in a
 compact row. Google Drive and OneDrive registration still opens the browser first.
 
 Select an account and use **Connect**, **Disconnect** or **Open in Dolphin**.

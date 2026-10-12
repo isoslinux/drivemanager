@@ -1,6 +1,6 @@
 # Validation scope
 
-## Current delivery: 1.14.0
+## Current delivery: 1.15.0
 
 The application, source archive and Fedora 44 noarch RPM are prepared locally.
 Automated tests cover operation safety, account workflows, UI behavior, four

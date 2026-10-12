@@ -27,6 +27,7 @@ of normal automated tests.
 | Diagnostics | Missing tools, timeouts, unexpected output, privacy and clipboard contents |
 | Notifications | Deduplication, recovery, multiple accounts, silence and preference rollback |
 | Quotas | Shared storage, missing/invalid values, isolated refresh, cleanup and stale selections |
+| Updates | Numeric stable versions, safe URLs, response bounds, rate limits, manual browser actions and unchanged account controls |
 | Languages | Complete keys/placeholders, private persistence, fallback, standard buttons and live switching |
 | Qt | Selection, action guards, dialogs, collapsed transfers and unchanged controls during language switching |
 

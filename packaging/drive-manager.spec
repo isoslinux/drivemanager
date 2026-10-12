@@ -1,5 +1,5 @@
 Name:           drive-manager
-Version:        1.14.0
+Version:        1.15.0
 Release:        1%{?dist}
 Summary:        Multi-account cloud drive desktop manager for KDE
 License:        MIT
@@ -47,6 +47,9 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src %{python3} -m unittest discover -s test
 %{_datadir}/applications/drive-manager.desktop
 
 %changelog
+* Tue Oct 13 2026 Drive Manager contributors - 1.15.0-1
+- Add manual stable-release checks with safe browser links
+
 * Tue Oct 13 2026 Drive Manager contributors - 1.14.0-1
 - Add four live application languages and English project documentation
 

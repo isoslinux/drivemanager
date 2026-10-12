@@ -6,6 +6,8 @@
 flowchart TD
     UI[PySide6 window and tray] --> Operations[Serial operation worker]
     UI --> Quota[Separate quota worker]
+    UI --> Updates[Manual update worker]
+    Updates --> GitHub[Public stable release metadata]
     Operations --> Manager[Account and mount policy]
     Manager --> Discovery[Metadata-only discovery]
     Manager --> Systemd[Transient user systemd units]
@@ -33,6 +35,7 @@ flowchart TD
 | `transfers.py` | Validate VFS statistics, dirty cache metadata, open-file protection and progress |
 | `diagnostics.py` | Allowlisted local checks and safe reports |
 | `notifications.py` | Per-account event deduplication and persistent mute preference |
+| `updates.py` | Manual public-release checks with safe links and no installation |
 | `quota.py` | Isolated, bounded capacity queries and numeric validation |
 | `i18n.py`, `messages*.py` | Four complete UI catalogs, language persistence and Qt standard buttons |
 | `packaging/` | KDE launcher and Fedora RPM recipe without activation scripts |
@@ -72,6 +75,8 @@ application-encrypted.
 A serial worker handles operations and quiet polling. A separate bounded quota
 worker prevents network quota queries from blocking actions or transfer updates.
 Results for an old selection cannot replace a newly selected account's display.
+A separate manual-update worker consults public GitHub metadata without blocking
+account operations or transfer monitoring.
 
 Language changes only update UI text and translators; they do not restart workers,
 replace selections, reauthorize accounts or change services. Preferences are private

@@ -33,6 +33,8 @@ class Window(QMainWindow):
         self.notification_settings = NotificationSettings(self.manager.home)
         self.notifications_enabled = self.notification_settings.load()
         self.pool = ThreadPoolExecutor(max_workers=1)
+        self.update_pool = ThreadPoolExecutor(max_workers=1)
+        self.update_future = None
         self.quota_pool = ThreadPoolExecutor(max_workers=1)
         self.quota_future = None
         self.quota_cache = {}
@@ -60,6 +62,8 @@ class Window(QMainWindow):
         toolbar = QHBoxLayout()
         button('add', self.add_account, toolbar)
         toolbar.addStretch()
+        self.update_button = QToolButton(); self.update_button.setText(self.t['updates'])
+        self.update_button.clicked.connect(self.check_updates); toolbar.addWidget(self.update_button)
         button('refresh', self.refresh, toolbar)
         button('diagnostics', self.diagnose, toolbar)
         layout.addLayout(toolbar)
@@ -167,6 +171,7 @@ class Window(QMainWindow):
         self.standard_translator.language = language
         QApplication.instance().installTranslator(self.standard_translator)
         self.setWindowTitle(self.t['title']+' '+__version__)
+        self.update_button.setText(self.t['update_checking' if self.update_future is not None else 'updates'])
         for key,control in self.buttons.items(): control.setText(self.t[key])
         for control,key in [(self.provider_label,'provider'),(self.mode_label,'mode'),(self.note_label,'note'),
                 (self.language_label,'language'),(self.account_menu_button,'account_menu'),
@@ -259,6 +264,7 @@ class Window(QMainWindow):
             self.label.setText(self.t['browser_error'])
 
     def tick(self):
+        self.tick_updates()
         self.tick_quota()
         try:
             while True:
@@ -334,6 +340,46 @@ class Window(QMainWindow):
         self.poll_ticks += 1
         if self.poll_ticks >= 8:
             self.poll_ticks = 0; self.poll()
+
+    def check_updates(self):
+        if self.update_future is not None: return
+        from .updates import check
+        self.update_button.setEnabled(False); self.update_button.setText(self.t['update_checking'])
+        self.update_future = self.update_pool.submit(check, __version__)
+
+    def tick_updates(self):
+        if self.update_future is None or not self.update_future.done(): return
+        from .updates import Update
+        future, self.update_future = self.update_future, None
+        try: result = future.result()
+        except Exception: result = Update('update_error', __version__)
+        self.update_button.setEnabled(True); self.update_button.setText(self.t['updates'])
+        self.show_updates(result)
+
+    def show_updates(self, result):
+        dialog = QDialog(self); dialog.setWindowTitle(self.t['updates']); dialog.resize(580, 260)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel(self.t['update_installed']+': '+result.installed))
+        if result.latest: layout.addWidget(QLabel(self.t['update_latest']+': '+result.latest))
+        message = self.t[result.state]
+        if result.state=='update_available' and not result.rpm_url:
+            message += '\n'+self.t['update_rpm_missing']
+        status = QLabel(message); status.setWordWrap(True); layout.addWidget(status)
+        note = QLabel(self.t['update_manual']); note.setWordWrap(True); layout.addWidget(note)
+        actions = QHBoxLayout()
+        def open_url(url):
+            if not QDesktopServices.openUrl(QUrl(url)):
+                status.setText(self.t['update_open_error'])
+        if result.rpm_url:
+            download = QPushButton(self.t['update_open_rpm']); download.clicked.connect(lambda:open_url(result.rpm_url))
+            actions.addWidget(download)
+        if result.release_url:
+            release = QPushButton(self.t['update_open_release']); release.clicked.connect(lambda:open_url(result.release_url))
+            actions.addWidget(release)
+        close = QPushButton(self.t['close_report']); close.clicked.connect(dialog.accept); actions.addWidget(close)
+        layout.addLayout(actions)
+        # Keep transfer polling active while this read-only dialog is open.
+        dialog.exec()
 
     def refresh_quota(self):
         self.quota_cache.pop(self.accounts.currentText(), None)
@@ -728,6 +774,7 @@ class Window(QMainWindow):
         if self.pending_registration is not None:
             self.pending_registration[1].unlink(missing_ok=True)
             self.pending_registration = None
+        self.update_pool.shutdown(wait=False, cancel_futures=True)
         self.quota_pool.shutdown(wait=False, cancel_futures=True)
         self.pool.shutdown(wait=False, cancel_futures=True)
         QApplication.instance().quit()

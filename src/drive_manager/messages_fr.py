@@ -78,3 +78,23 @@ DIAGNOSTICS = {
  'clean':'Aucune modification en attente détectée dans le cache d’écriture.',
  'unmonitored':'Montage externe : sa file d’envoi ne peut pas être vérifiée.',
  'footer':"Vérifications locales : accès Internet, autorisations OAuth et disponibilité du cloud non vérifiés.\nAucun jeton, mot de passe, e-mail, nom de compte, chemin personnel ou journal.\nAucune modification de configuration ni démarrage ou arrêt de service."}
+
+MESSAGES.update({'updates': 'Rechercher des mises à jour',
+ 'update_checking': 'Recherche de mises à jour…',
+ 'update_installed': 'Version installée',
+ 'update_latest': 'Dernière version stable',
+ 'update_available': 'Une mise à jour est disponible. Téléchargez le RPM et installez-le '
+                     'manuellement.',
+ 'update_current': 'Vous utilisez la dernière version stable publiée.',
+ 'update_ahead': 'La version installée est plus récente que la dernière version stable publiée.',
+ 'update_error': 'Impossible de vérifier les mises à jour. Vérifiez votre connexion Internet et '
+                 'réessayez plus tard.',
+ 'update_rate_limit': 'GitHub limite temporairement les requêtes. Réessayez plus tard.',
+ 'update_rpm_missing': 'Aucun RPM compatible avec Fedora 44 n’est disponible. Ouvrez la page de la '
+                       'version pour consulter ses fichiers.',
+ 'update_open_rpm': 'Télécharger le RPM',
+ 'update_open_release': 'Ouvrir la page de la version',
+ 'update_open_error': 'Impossible d’ouvrir le navigateur par défaut.',
+ 'update_manual': 'L’installation est manuelle. Cette vérification ne télécharge ni n’exécute de '
+                  'logiciel, ne change pas les identifiants et n’interrompt pas les montages ou '
+                  'les envois.'})
