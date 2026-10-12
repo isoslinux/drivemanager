@@ -1,52 +1,91 @@
-# Drive Manager 1.7.0 — progreso y estados de sincronización
+# Drive Manager
 
-Aplicación nativa Python 3 / PySide6 para Fedora 44 KDE Plasma. Gestiona Google Drive, Internxt y OneDrive como carpetas virtuales mediante Rclone, FUSE y systemd de usuario.
+Aplicación nativa para Fedora 44 KDE Plasma que gestiona Google Drive, Internxt y
+OneDrive como carpetas virtuales mediante Python 3, PySide6, Rclone, FUSE y systemd
+de usuario. Admite varias cuentas con carpetas independientes y modos de solo
+lectura o lectura/escritura.
 
-Permite varias cuentas con carpetas independientes, modos de lectura o lectura/escritura, caché configurable, montaje automático, bandeja del sistema y progreso de transferencias. Las operaciones de desconexión y eliminación protegen las subidas pendientes. Interfaz en español e inglés.
+## Descargar e instalar
 
-## Obtener el código
+La versión publicada es **1.13.0**. Descarga el archivo `noarch.rpm` desde
+[GitHub Releases](https://github.com/isoslinux/drivemanager/releases/latest) y ábrelo
+con Discover. También puedes instalarlo o actualizarlo desde la carpeta de descarga:
+
+```bash
+sudo dnf install ./drive-manager-1.13.0-1.fc44.noarch.rpm
+```
+
+Abre **Drive Manager** desde el menú de KDE. No ejecutes la aplicación con sudo.
+Cada ordenador autentica sus cuentas por separado; el repositorio no incluye
+credenciales ni datos de tus unidades.
+
+## Usar la aplicación
+
+- **Nueva conexión** permite añadir Google Drive o OneDrive mediante navegador,
+  o Internxt con sus credenciales y KWallet.
+- Selecciona una cuenta y usa **Conectar**, **Desconectar** o **Abrir en Dolphin**.
+- El menú **Cuenta** reúne **Ajustes**, **Reautorizar** y **Eliminar conexión**.
+- Configura carpeta, caché, modo de acceso y montaje al iniciar sesión por cuenta.
+- Despliega **Transferencias** para ver el progreso y activa o silencia los avisos.
+- **Diagnóstico** comprueba dependencias y estado local con un informe sin secretos.
+- La versión 1.13.0 muestra la cuota por cuenta; **Actualizar espacio** consulta datos
+  nuevos. Internxt cifrado requiere un montaje activo para consultar su cuota.
+
+Cerrar la ventana la oculta si hay bandeja. **Salir de la aplicación** deja los
+montajes funcionando; finalizan con la sesión de usuario. El montaje automático
+es opcional por cuenta y no habilita linger.
+
+## Ejecutar desde fuentes
 
 ```bash
 git clone https://github.com/isoslinux/drivemanager.git
 cd drivemanager
-```
-
-
-## Uso desde el código
-
-Instala las dependencias y ejecuta desde este directorio:
-
-```bash
-sudo dnf install python3 python3-pyside6 rclone fuse3 dolphin
+sudo dnf install python3 python3-pyside6 rclone fuse3 systemd dolphin psmisc kf6-kwallet
 PYTHONPATH=src python3 -m drive_manager.app
 ```
 
-Estos comandos son para la instalación inicial; montar, desmontar y abrir carpetas se hace desde la interfaz. No se ejecutaron cambios de paquetes ni operaciones de montaje durante el desarrollo.
+Se requiere Rclone 1.73 o posterior y una sesión gráfica con systemd de usuario.
+Las operaciones de cuentas y montajes se realizan desde la interfaz.
 
-Selecciona una conexión y pulsa **Montar (solo lectura)**. El estado se actualiza cada cinco segundos. **Desmontar** solo está disponible para montajes propios y solicita confirmación. Cerrar la ventana la oculta cuando hay bandeja; **Salir de la aplicación** deja los montajes funcionando. Los servicios duran la sesión de usuario; no se habilita linger ni montaje automático.
+## Protección de configuración y archivos
 
-La conexión debe existir en el archivo de configuración de Rclone y ser de tipo `drive`. Se requiere una versión con `listremotes --json`. Las conexiones de entorno, los alias/crypt y las configuraciones cifradas con contraseña interactiva quedan fuera del MVP. La versión 1.1.0 añade un asistente OAuth para cuentas nuevas, descrito más abajo.
+Las conexiones existentes se detectan sin modificar sus credenciales. Los montajes
+utilizan una copia privada de su configuración; las cuentas nuevas tienen archivos
+independientes. Las configuraciones contienen secretos y no deben compartirse.
+La aplicación no registra tokens ni muestra errores brutos de OAuth.
 
-## Protección de configuración y datos
+Lectura/escritura modifica archivos de la nube y se activa expresamente. Desconectar
+y eliminar requieren confirmación y se bloquean si existen subidas pendientes o
+un estado de caché desconocido. Eliminar una conexión externa exige confirmar que
+se modificará la configuración original de Rclone. No se borran archivos remotos
+al eliminar una conexión ni se detienen montajes externos.
 
-No se edita el archivo original de Rclone. Al montar se crea una copia privada de su configuración en `~/.local/state/drive-manager/`, directorio 0700 y archivos 0600. La copia contiene credenciales de las conexiones del archivo original: no se debe compartir ni incluir en informes. Rclone puede actualizar sus tokens OAuth en esa copia sin tocar el original. La copia se conserva mientras pueda usarla el servicio; no se borra al cerrar la interfaz.
+La caché puede contener documentos locales; sus carpetas son privadas, pero la
+aplicación no cifra el contenido de la caché. Los montajes no se fuerzan ni se
+reutilizan carpetas ocupadas. Herramientas externas aún pueden producir carreras.
 
-No hay logs de aplicación; stdout/stderr del servicio Rclone se descartan y los errores de procesos no muestran su contenido. Los montajes nuevos usan `--read-only --vfs-cache-mode=full` con caché privada de lectura, por lo que la aplicación no crea subidas pendientes. Ningún servicio externo se detiene ni se adopta. Una operación explícita de desmontaje detiene únicamente un servicio propio verificado. No hay desmontaje forzado, perezoso ni al salir.
+El estado de FUSE/systemd y una cola vacía no verifican por sí solos la conectividad
+con la nube. La cuota depende del proveedor; valores desconocidos se muestran como
+no disponibles. Los errores de acceso requieren atención y nunca provocan una
+eliminación automática de datos o credenciales.
 
-Los puntos de montaje son `~/DriveManager/<identificador>`; los identificadores proceden del nombre de conexión. Los directorios deben estar vacíos y no ser enlaces simbólicos. Un bloqueo entre instancias serializa las operaciones de la aplicación. No puede impedir carreras con herramientas externas que monten simultáneamente.
+## Documentación y pruebas
 
-**El estado mostrado es el estado local de FUSE/systemd, no una prueba de conectividad con Google.** Una conexión caída puede seguir apareciendo montada. Rclone administra sus reintentos de acceso; un servicio que falla no se reinicia automáticamente. Si hay un montaje obsoleto, el MVP bloquea otro montaje y no intenta forzarlo.
-
-## Desarrollo y comprobaciones
+Consulta [instalación y RPM](docs/install.md), [arquitectura](docs/architecture.md),
+[interfaz](docs/INTERFACE.md), [reautorización](docs/REAUTHORIZATION.md),
+[diagnóstico](docs/DIAGNOSTICS.md), [notificaciones](docs/NOTIFICATIONS.md) y
+[espacio por cuenta](docs/STORAGE.md).
 
 ```bash
-PYTHONPATH=src python3 -m unittest discover -s tests -v
 QT_QPA_PLATFORM=offscreen PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-Consulta [arquitectura y fases](docs/architecture.md), [plan de pruebas](docs/testing.md) e [instalación y RPM](docs/install.md).
+La entrega 1.13.0 supera **125 pruebas automatizadas** y dispone de RPM para Fedora
+44. Se han comprobado widgets Qt sin pantalla y una consulta Rclone real a un
+backend local sintético. La aceptación con cuentas reales, FUSE, notificaciones
+KDE e instalación se realiza desde la sesión del titular de las cuentas.
 
-Entregado: núcleo probado con procesos simulados y arranque Qt sin pantalla. Pendiente: aceptación con Drive/FUSE real, bandeja en una sesión KDE e instalación del RPM. No se ha afirmado ni probado una subida o una reconexión real.
+## Historial de entregas
 
 ## Actualización 1.0.1: apertura de documentos
 
