@@ -69,3 +69,32 @@ class UiSmoke(unittest.TestCase):
             window.timer.stop()
             window.tray.hide()
             window.hide()
+
+@unittest.skipUnless(os.environ.get('QT_QPA_PLATFORM') == 'offscreen', 'Set QT_QPA_PLATFORM=offscreen for UI smoke')
+class DiagnosticsUi(unittest.TestCase):
+    def test_report_is_readonly_and_copy_matches_visible_content(self):
+        from PySide6.QtWidgets import QApplication, QPlainTextEdit, QPushButton
+        from PySide6.QtCore import QTimer, QEventLoop
+        from drive_manager.app import Window
+        from drive_manager.diagnostics import Check, Report
+        app=QApplication.instance() or QApplication([])
+        with patch('drive_manager.service.Manager.discover_accounts',return_value=[]):
+            window=Window()
+            loop=QEventLoop();QTimer.singleShot(350,loop.quit);loop.exec()
+            observed={}
+            def inspect():
+                dialog=app.activeModalWidget()
+                try:
+                    view=dialog.findChild(QPlainTextEdit)
+                    observed['readonly']=view.isReadOnly()
+                    observed['text']=view.toPlainText()
+                    copy=next(b for b in dialog.findChildren(QPushButton) if b.text()==window.t['copy_report'])
+                    copy.click();observed['clipboard']=app.clipboard().text()
+                finally:dialog.accept()
+            QTimer.singleShot(0,inspect)
+            window.show_diagnostics(Report((Check('rclone','ok','installed','1.74.3'),)))
+            self.assertTrue(observed['readonly'])
+            self.assertEqual(observed['text'],observed['clipboard'])
+            self.assertIn('1.74.3',observed['text'])
+            self.assertTrue(window.buttons['diagnostics'].isEnabled())
+            window.timer.stop();window.pool.shutdown();window.tray.hide();window.hide()

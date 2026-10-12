@@ -5,7 +5,7 @@ from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QIcon, QAction, QDesktopServices
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
     QLabel, QComboBox, QPushButton, QMessageBox, QSystemTrayIcon, QMenu, QDialog, QFormLayout, QLineEdit,
-    QSpinBox, QDialogButtonBox, QFileDialog, QHBoxLayout, QCheckBox, QInputDialog, QProgressBar)
+    QSpinBox, QDialogButtonBox, QFileDialog, QHBoxLayout, QCheckBox, QInputDialog, QProgressBar, QPlainTextEdit)
 from .process import Runner, OperationError
 from .remotes import discover
 from .service import Manager
@@ -14,9 +14,10 @@ from queue import Queue, Empty
 from .accounts import AuthorizationError
 from .providers import PROVIDERS
 from .account_list import AccountList
+from . import __version__
 
 TEXT = {
-'en': {'title':'Drive Manager 1.7.0', 'refresh':'Refresh connections', 'mount':'Connect',
+'en': {'title':'Drive Manager '+__version__, 'refresh':'Refresh connections', 'mount':'Connect',
 'unmount':'Disconnect', 'open':'Open in Dolphin', 'quit':'Quit application', 'oauth_open':'Open authorization browser', 'oauth_port':'Another authorization is using port 53682. Close it or cancel it and retry.',
 'oauth_server':'Could not start the local authorization server.',
 'onedrive_error':'Could not configure OneDrive. Check Microsoft permissions and selected drive.',
@@ -57,7 +58,7 @@ TEXT = {
 'error':'Operation failed', 'empty':'No connections found',
 'busy':'Working…', 'mounted':'Mounted (read-only)', 'external':'External mount/service',
 'starting':'Starting / reconnecting', 'unmounted':'Unmounted', 'failed':'Mount failed'},
-'es': {'title':'Drive Manager 1.7.0', 'refresh':'Actualizar conexiones', 'mount':'Conectar',
+'es': {'title':'Drive Manager '+__version__, 'refresh':'Actualizar conexiones', 'mount':'Conectar',
 'unmount':'Desconectar', 'open':'Abrir en Dolphin', 'quit':'Salir de la aplicación', 'oauth_open':'Abrir navegador para autorizar', 'oauth_port':'Otra autorización ocupa el puerto 53682. Ciérrala o cancélala y vuelve a intentarlo.',
 'oauth_server':'No se pudo iniciar el servidor local de autorización.',
 'onedrive_error':'No se pudo configurar OneDrive. Comprueba permisos de Microsoft y unidad elegida.',
@@ -100,12 +101,14 @@ TEXT = {
 'starting':'Iniciando / reconectando', 'unmounted':'Desmontado', 'failed':'Montaje fallido'}}
 
 TEXT['en'].update({
+    'diagnostics': 'Diagnostics', 'copy_report': 'Copy report', 'close_report': 'Close',
     'upgrade_confirm': 'Allow this connection to modify your cloud files? Your browser will open to authorize read/write access. Sign in with the SAME account. Cancelling keeps the current mode.',
     'reauth': 'Reauthorize account',
     'reauth_confirm': 'Sign in with the SAME account as this connection. Its folder, cache and settings will be kept. The connection must be disconnected, with no pending uploads. Continue?',
     'reauth_error': 'Could not renew authorization. Use a disconnected Google Drive or OneDrive connection created by this app, without custom OAuth credentials. The original connection has been preserved.',
     'reauth_identity': 'The selected OneDrive belongs to another drive. The original connection has been preserved.'})
 TEXT['es'].update({
+    'diagnostics': 'Diagnóstico', 'copy_report': 'Copiar informe', 'close_report': 'Cerrar',
     'upgrade_confirm': '¿Permitir que esta conexión modifique tus archivos en la nube? Se abrirá el navegador para autorizar lectura/escritura. Inicia sesión con la MISMA cuenta. Cancelar conserva el modo actual.',
     'reauth': 'Reautorizar cuenta',
     'reauth_confirm': 'Inicia sesión con la MISMA cuenta de esta conexión. Se conservarán su carpeta, caché y ajustes. Debe estar desconectada y sin subidas pendientes. ¿Continuar?',
@@ -151,7 +154,7 @@ class Window(QMainWindow):
         self.progress_bar = QProgressBar(); self.progress_bar.setRange(0,100); self.progress_bar.hide()
         layout.addWidget(self.progress_bar)
         self.buttons = {}
-        for key, callback in [('refresh', self.refresh), ('mount', self.mount),
+        for key, callback in [('refresh', self.refresh), ('diagnostics', self.diagnose), ('mount', self.mount),
                               ('unmount', self.unmount), ('open', self.open_folder),
                               ('reauth', self.reauthorize_account), ('settings', self.edit_settings), ('delete', self.delete_connection), ('add', self.add_account),
                               ('cancel_oauth', self.cancel_authorization), ('oauth_open', self.open_authorization)]:
@@ -240,6 +243,7 @@ class Window(QMainWindow):
             self.provider.setEnabled(True)
             self.access_mode.setEnabled(True)
             self.buttons['refresh'].setEnabled(True)
+            self.buttons['diagnostics'].setEnabled(True)
             self.buttons['add'].setEnabled(True)
             if not was_polling:
                 self.buttons['cancel_oauth'].setEnabled(False)
@@ -267,6 +271,28 @@ class Window(QMainWindow):
         self.poll_ticks += 1
         if self.poll_ticks >= 8:
             self.poll_ticks = 0; self.poll()
+
+    def diagnose(self):
+        from .diagnostics import collect
+        remote = self.accounts.currentText()
+        self.submit(lambda: collect(self.manager, remote), self.show_diagnostics)
+
+    def show_diagnostics(self, report):
+        from .diagnostics import format_report
+        text = format_report(report, 'es' if self.t is TEXT['es'] else 'en')
+        dialog = QDialog(self); dialog.setWindowTitle(self.t['diagnostics'])
+        dialog.resize(740, 500)
+        layout = QVBoxLayout(dialog)
+        output = QPlainTextEdit(text); output.setReadOnly(True); layout.addWidget(output)
+        actions = QHBoxLayout()
+        copy = QPushButton(self.t['copy_report'])
+        copy.clicked.connect(lambda: QApplication.clipboard().setText(text))
+        close = QPushButton(self.t['close_report']); close.clicked.connect(dialog.accept)
+        actions.addWidget(copy); actions.addWidget(close); layout.addLayout(actions)
+        self.timer.stop()
+        try: dialog.exec()
+        finally: self.timer.start(250)
+        self.poll()
 
     def refresh(self):
         self.submit(self.manager.discover_accounts, self.set_accounts)

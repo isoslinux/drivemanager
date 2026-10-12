@@ -229,3 +229,9 @@ Consulta [las garantías y limitaciones](docs/REAUTHORIZATION.md).
 
 Activa lectura/escritura en los ajustes de una cuenta existente. Si faltan permisos,
 se solicita autorización mediante navegador sin duplicar la conexión.
+
+## Versión 1.10.0
+
+Botón **Diagnóstico** para comprobar dependencias y el estado local de la cuenta.
+Informe ES/EN que se puede copiar sin credenciales ni datos personales.
+[Detalles](docs/DIAGNOSTICS.md).
