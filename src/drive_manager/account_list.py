@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView,
 
 class AccountList(QTableWidget):
     currentIndexChanged=Signal(int)
-    def __init__(self, headers):
+    def __init__(self, headers, stretch_column=2):
         super().__init__(0,len(headers))
         self.setHorizontalHeaderLabels(headers)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -13,7 +13,7 @@ class AccountList(QTableWidget):
         self.setAlternatingRowColors(True);self.setShowGrid(False)
         self.verticalHeader().hide()
         self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        self.horizontalHeader().setSectionResizeMode(2,QHeaderView.ResizeMode.Stretch)
+        self.horizontalHeader().setSectionResizeMode(stretch_column,QHeaderView.ResizeMode.Stretch)
         self.itemSelectionChanged.connect(lambda:self.currentIndexChanged.emit(self.currentRow()))
     def currentText(self):
         item=self.item(self.currentRow(),0)

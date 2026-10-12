@@ -1,11 +1,11 @@
 """Qt UI: operations run in a single worker; polling never stops a service."""
 import sys
 from concurrent.futures import ThreadPoolExecutor
-from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtCore import QTimer, QUrl, Qt
 from PySide6.QtGui import QIcon, QAction, QDesktopServices
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
     QLabel, QComboBox, QPushButton, QMessageBox, QSystemTrayIcon, QMenu, QDialog, QFormLayout, QLineEdit,
-    QSpinBox, QDialogButtonBox, QFileDialog, QHBoxLayout, QCheckBox, QInputDialog, QProgressBar, QPlainTextEdit)
+    QSpinBox, QDialogButtonBox, QFileDialog, QHBoxLayout, QCheckBox, QInputDialog, QProgressBar, QPlainTextEdit, QToolButton)
 from .process import Runner, OperationError
 from .remotes import discover
 from .service import Manager
@@ -101,14 +101,14 @@ TEXT = {
 'starting':'Iniciando / reconectando', 'unmounted':'Desmontado', 'failed':'Montaje fallido'}}
 
 TEXT['en'].update({
-    'diagnostics': 'Diagnostics', 'copy_report': 'Copy report', 'close_report': 'Close',
+    'file_name': 'File', 'account_menu': 'Account', 'diagnostics': 'Diagnostics', 'copy_report': 'Copy report', 'close_report': 'Close',
     'upgrade_confirm': 'Allow this connection to modify your cloud files? Your browser will open to authorize read/write access. Sign in with the SAME account. Cancelling keeps the current mode.',
     'reauth': 'Reauthorize account',
     'reauth_confirm': 'Sign in with the SAME account as this connection. Its folder, cache and settings will be kept. The connection must be disconnected, with no pending uploads. Continue?',
     'reauth_error': 'Could not renew authorization. Use a disconnected Google Drive or OneDrive connection created by this app, without custom OAuth credentials. The original connection has been preserved.',
     'reauth_identity': 'The selected OneDrive belongs to another drive. The original connection has been preserved.'})
 TEXT['es'].update({
-    'diagnostics': 'Diagnóstico', 'copy_report': 'Copiar informe', 'close_report': 'Cerrar',
+    'file_name': 'Archivo', 'account_menu': 'Cuenta', 'diagnostics': 'Diagnóstico', 'copy_report': 'Copiar informe', 'close_report': 'Cerrar',
     'upgrade_confirm': '¿Permitir que esta conexión modifique tus archivos en la nube? Se abrirá el navegador para autorizar lectura/escritura. Inicia sesión con la MISMA cuenta. Cancelar conserva el modo actual.',
     'reauth': 'Reautorizar cuenta',
     'reauth_confirm': 'Inicia sesión con la MISMA cuenta de esta conexión. Se conservarán su carpeta, caché y ajustes. Debe estar desconectada y sin subidas pendientes. ¿Continuar?',
@@ -133,35 +133,68 @@ class Window(QMainWindow):
         self.last_error = False
         self.pending_registration = None
         self.auth_write = False
+        self.account_states = {}
         self.setWindowTitle(self.t['title'])
-        self.resize(900, 650)
+        self.resize(1000, 600)
         body = QWidget(); layout = QVBoxLayout(body); self.setCentralWidget(body)
-        layout.addWidget(QLabel(self.t['note']))
-        self.accounts = AccountList([self.t['account'],self.t['provider_column'],self.t['path'],self.t['access'],self.t['status']]); layout.addWidget(self.accounts)
-        layout.addWidget(QLabel(self.t['provider']))
+        self.buttons = {}
+        def button(key, callback, row):
+            control = QPushButton(self.t[key]); control.clicked.connect(callback)
+            row.addWidget(control); self.buttons[key] = control
+            return control
+        toolbar = QHBoxLayout()
+        button('add', self.add_account, toolbar)
+        toolbar.addStretch()
+        button('refresh', self.refresh, toolbar)
+        button('diagnostics', self.diagnose, toolbar)
+        layout.addLayout(toolbar)
+        connection_options = QHBoxLayout()
+        connection_options.addWidget(QLabel(self.t['provider']))
         self.provider = QComboBox()
         for provider in PROVIDERS:
             self.provider.addItem(provider.label, provider.key)
             self.provider.model().item(self.provider.count()-1).setEnabled(provider.available)
-        layout.addWidget(self.provider)
-        layout.addWidget(QLabel(self.t['mode']))
-        self.access_mode = QComboBox(); self.access_mode.addItems([self.t['mode_ro'], self.t['mode_rw']]); layout.addWidget(self.access_mode)
+        connection_options.addWidget(self.provider)
+        connection_options.addSpacing(16)
+        connection_options.addWidget(QLabel(self.t['mode']))
+        self.access_mode = QComboBox(); self.access_mode.addItems([self.t['mode_ro'], self.t['mode_rw']])
+        connection_options.addWidget(self.access_mode); connection_options.addStretch()
+        layout.addLayout(connection_options)
+        layout.addWidget(QLabel(self.t['note']))
+        self.accounts = AccountList([self.t['account'],self.t['provider_column'],self.t['path'],self.t['access'],self.t['status']])
+        layout.addWidget(self.accounts, 1)
+        primary = QHBoxLayout()
+        for key, callback in [('mount', self.mount), ('unmount', self.unmount), ('open', self.open_folder)]:
+            button(key, callback, primary)
+        primary.addStretch()
+        self.account_menu = QMenu(self)
+        for key, callback in [('settings', self.edit_settings), ('reauth', self.reauthorize_account), ('delete', self.delete_connection)]:
+            if key == 'delete': self.account_menu.addSeparator()
+            action = QAction(self.t[key], self); action.triggered.connect(callback)
+            action.setEnabled(False); self.account_menu.addAction(action); self.buttons[key] = action
+        self.account_menu_button = QToolButton()
+        self.account_menu_button.setText(self.t['account_menu'])
+        self.account_menu_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.account_menu_button.setMenu(self.account_menu); self.account_menu_button.setEnabled(False)
+        primary.addWidget(self.account_menu_button); layout.addLayout(primary)
+        self.accounts.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.accounts.customContextMenuRequested.connect(self.open_account_menu)
         self.label = QLabel(); self.label.setWordWrap(True); layout.addWidget(self.label)
-        layout.addWidget(QLabel(self.t['transfers']))
-        self.transfer_table = AccountList([self.t['name'],'%','KiB/s','ETA'])
-        self.transfer_table.setMaximumHeight(160)
-        layout.addWidget(self.transfer_table)
+        oauth_row = QHBoxLayout()
+        for key, callback in [('cancel_oauth', self.cancel_authorization), ('oauth_open', self.open_authorization)]:
+            control = button(key, callback, oauth_row); control.setEnabled(False); control.hide()
+        oauth_row.addStretch(); layout.addLayout(oauth_row)
+        self.transfer_toggle = QToolButton(); self.transfer_toggle.setText(self.t['transfers'])
+        self.transfer_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.transfer_toggle.setCheckable(True); self.transfer_toggle.setArrowType(Qt.ArrowType.RightArrow)
+        layout.addWidget(self.transfer_toggle)
+        self.transfer_panel = QWidget(); transfers_layout = QVBoxLayout(self.transfer_panel)
+        transfers_layout.setContentsMargins(0, 0, 0, 0)
+        self.transfer_table = AccountList([self.t['file_name'],'%','KiB/s','ETA'], stretch_column=0)
+        self.transfer_table.setMaximumHeight(160); transfers_layout.addWidget(self.transfer_table)
         self.progress_bar = QProgressBar(); self.progress_bar.setRange(0,100); self.progress_bar.hide()
-        layout.addWidget(self.progress_bar)
-        self.buttons = {}
-        for key, callback in [('refresh', self.refresh), ('diagnostics', self.diagnose), ('mount', self.mount),
-                              ('unmount', self.unmount), ('open', self.open_folder),
-                              ('reauth', self.reauthorize_account), ('settings', self.edit_settings), ('delete', self.delete_connection), ('add', self.add_account),
-                              ('cancel_oauth', self.cancel_authorization), ('oauth_open', self.open_authorization)]:
-            button = QPushButton(self.t[key]); button.clicked.connect(callback)
-            layout.addWidget(button); self.buttons[key] = button
-        self.buttons['cancel_oauth'].setEnabled(False)
-        self.buttons['oauth_open'].setEnabled(False)
+        transfers_layout.addWidget(self.progress_bar); layout.addWidget(self.transfer_panel)
+        self.transfer_panel.hide(); self.transfer_toggle.toggled.connect(self.toggle_transfers)
         self.accounts.currentIndexChanged.connect(self.selection_changed)
         self.tray = QSystemTrayIcon(QIcon.fromTheme('drive-harddisk'), self)
         menu = QMenu(self)
@@ -173,6 +206,22 @@ class Window(QMainWindow):
         self.timer = QTimer(self); self.timer.timeout.connect(self.tick); self.timer.start(250)
         self.poll_ticks = 0
         self.refresh()
+
+    def toggle_transfers(self, expanded):
+        self.transfer_panel.setVisible(expanded)
+        self.transfer_toggle.setArrowType(Qt.ArrowType.DownArrow if expanded else Qt.ArrowType.RightArrow)
+
+    def prepare_account_menu(self, position):
+        if not self.accounts.isEnabled(): return False
+        index = self.accounts.indexAt(position)
+        if not index.isValid(): return False
+        self.accounts.setCurrentCell(index.row(), 0)
+        return True
+
+    def open_account_menu(self, position):
+        if self.prepare_account_menu(position):
+            # Opening a menu never performs an operation; each action keeps its guards.
+            self.account_menu.exec(self.accounts.viewport().mapToGlobal(position))
 
     def submit(self, task, callback, error_key="error", quiet=False):
         if self.future is not None:
@@ -194,6 +243,8 @@ class Window(QMainWindow):
         self.provider.setEnabled(False)
         self.access_mode.setEnabled(False)
         self.buttons['cancel_oauth'].setEnabled(self.oauth_cancel is not None)
+        self.buttons['cancel_oauth'].setVisible(self.oauth_cancel is not None)
+        self.buttons['oauth_open'].setVisible(self.oauth_cancel is not None)
 
     def open_authorization(self):
         if self.browser_url and not QDesktopServices.openUrl(QUrl(self.browser_url)):
@@ -228,6 +279,7 @@ class Window(QMainWindow):
                 url = self.oauth_urls.get_nowait()
                 if self.oauth_cancel is not None and not self.oauth_cancel.is_set():
                     self.browser_url = url
+                    self.buttons['oauth_open'].setVisible(True)
                     self.buttons['oauth_open'].setEnabled(True)
                     self.open_authorization()
         except Empty:
@@ -248,6 +300,8 @@ class Window(QMainWindow):
             if not was_polling:
                 self.buttons['cancel_oauth'].setEnabled(False)
                 self.buttons['oauth_open'].setEnabled(False)
+                self.buttons['cancel_oauth'].hide()
+                self.buttons['oauth_open'].hide()
                 self.browser_url = None
                 self.oauth_cancel = None
             try: self.callback(future.result())
@@ -298,12 +352,14 @@ class Window(QMainWindow):
         self.submit(self.manager.discover_accounts, self.set_accounts)
 
     def set_accounts(self, names, selected=None):
+        self.account_states.clear()
         current = selected or self.accounts.currentText()
         self.accounts.blockSignals(True); self.accounts.clear(); self.accounts.addItems(names)
         if current in names: self.accounts.setCurrentText(current)
         self.accounts.blockSignals(False)
         if names: self.poll()
         else:
+            self.account_menu_button.setEnabled(False)
             self.label.setText(self.t['empty'])
             self.transfer_table.clear(); self.progress_bar.hide()
             for key in ('mount', 'unmount', 'settings', 'open', 'delete', 'reauth'):
@@ -311,6 +367,13 @@ class Window(QMainWindow):
 
     def selection_changed(self):
         self.last_error = False
+        remote = self.accounts.currentText()
+        if remote in self.account_states:
+            self.show_status(self.account_states[remote])
+        else:
+            self.account_menu_button.setEnabled(False)
+            for key in ('mount', 'unmount', 'open', 'settings', 'reauth', 'delete'):
+                self.buttons[key].setEnabled(False)
         self.poll()
 
     def poll(self):
@@ -323,12 +386,15 @@ class Window(QMainWindow):
     def show_accounts(self, rows):
         labels={provider.key:provider.label for provider in PROVIDERS}
         for name,provider,status in rows:
+            self.account_states[name] = status
             self.accounts.update_account(name,labels.get(provider,provider),status.path,
                 '—' if status.state=='external' else self.t['mode_rw' if status.writable else 'mode_ro'],
                 self.t[status.progress.state] if status.progress is not None else self.t['mounted_rw' if status.writable and status.state=='mounted' else status.state])
             if name==self.accounts.currentText():self.show_status(status)
 
     def show_status(self, status):
+        self.account_states[self.accounts.currentText()] = status
+        self.account_menu_button.setEnabled(bool(self.accounts.currentText()))
         self.accounts.update_account(self.accounts.currentText(), self.accounts.item(self.accounts.currentRow(),1).text(),
             status.path, '—' if status.state=='external' else self.t['mode_rw' if status.writable else 'mode_ro'], self.t[status.progress.state] if status.progress is not None else self.t['mounted_rw' if status.writable and status.state=='mounted' else status.state])
         origin = 'app_origin' if self.manager.is_app_account(self.accounts.currentText()) else 'external_origin'

@@ -98,3 +98,62 @@ class DiagnosticsUi(unittest.TestCase):
             self.assertIn('1.74.3',observed['text'])
             self.assertTrue(window.buttons['diagnostics'].isEnabled())
             window.timer.stop();window.pool.shutdown();window.tray.hide();window.hide()
+
+@unittest.skipUnless(os.environ.get('QT_QPA_PLATFORM') == 'offscreen', 'Set QT_QPA_PLATFORM=offscreen for UI smoke')
+class SimplifiedUi(unittest.TestCase):
+    def test_collapsible_transfers_and_row_menu_use_selected_account(self):
+        from PySide6.QtWidgets import QApplication, QPushButton, QMenu
+        from PySide6.QtGui import QAction
+        from PySide6.QtCore import QTimer, QEventLoop, Qt
+        from drive_manager.app import Window
+        from drive_manager.service import Status
+        app=QApplication.instance() or QApplication([])
+        def status(remote):return Status('external' if remote=='work' else 'unmounted','/demo/'+remote)
+        with patch('drive_manager.service.Manager.discover_accounts',return_value=['personal','work']), \
+             patch('drive_manager.service.Manager.provider_of',return_value='drive'), \
+             patch('drive_manager.service.Manager.status',side_effect=status), \
+             patch('drive_manager.service.Manager.is_app_account',return_value=True):
+            window=Window();window.show()
+            loop=QEventLoop();QTimer.singleShot(600,loop.quit);loop.exec()
+            self.assertIsInstance(window.buttons['settings'],QAction)
+            self.assertIsInstance(window.buttons['mount'],QPushButton)
+            self.assertNotIn(window.t['delete'],[b.text() for b in window.findChildren(QPushButton)])
+            self.assertTrue(window.transfer_panel.isHidden())
+            window.transfer_toggle.click()
+            self.assertFalse(window.transfer_panel.isHidden())
+            self.assertEqual(window.transfer_toggle.arrowType(),Qt.ArrowType.DownArrow)
+            window.transfer_toggle.click();self.assertTrue(window.transfer_panel.isHidden())
+            work=window.accounts.visualItemRect(window.accounts.item(1,0)).center()
+            self.assertTrue(window.prepare_account_menu(work))
+            self.assertEqual(window.accounts.currentText(),'work')
+            self.assertFalse(window.buttons['settings'].isEnabled())
+            self.assertFalse(window.buttons['delete'].isEnabled())
+            self.assertTrue(window.buttons['open'].isEnabled())
+            window.accounts.setCurrentText('personal')
+            self.assertTrue(window.buttons['settings'].isEnabled())
+            with patch.object(window,'submit') as submit:
+                window.buttons['settings'].trigger()
+                submit.assert_called_once()
+                with patch.object(window.manager.settings,'load') as load:
+                    submit.call_args.args[0]();load.assert_called_once_with('personal')
+            self.assertTrue(window.buttons['cancel_oauth'].isHidden())
+            self.assertTrue(window.buttons['oauth_open'].isHidden())
+            window.timer.stop();window.pool.shutdown();window.tray.hide();window.hide()
+    def test_new_oauth_controls_are_visible_and_hidden_on_completion(self):
+        from PySide6.QtWidgets import QApplication
+        from PySide6.QtCore import QTimer, QEventLoop
+        from threading import Event
+        from drive_manager.app import Window
+        app=QApplication.instance() or QApplication([])
+        with patch('drive_manager.service.Manager.discover_accounts',return_value=[]):
+            window=Window();window.show()
+            loop=QEventLoop();QTimer.singleShot(350,loop.quit);loop.exec()
+            finished=Event();window.oauth_cancel=Event()
+            window.submit(lambda:finished.wait(1),lambda value:None)
+            self.assertFalse(window.buttons['cancel_oauth'].isHidden())
+            self.assertFalse(window.buttons['oauth_open'].isHidden())
+            finished.set()
+            loop=QEventLoop();QTimer.singleShot(350,loop.quit);loop.exec()
+            self.assertTrue(window.buttons['cancel_oauth'].isHidden())
+            self.assertTrue(window.buttons['oauth_open'].isHidden())
+            window.timer.stop();window.pool.shutdown();window.tray.hide();window.hide()

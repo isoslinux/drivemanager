@@ -235,3 +235,8 @@ se solicita autorización mediante navegador sin duplicar la conexión.
 Botón **Diagnóstico** para comprobar dependencias y el estado local de la cuenta.
 Informe ES/EN que se puede copiar sin credenciales ni datos personales.
 [Detalles](docs/DIAGNOSTICS.md).
+
+## Versión 1.11.0
+
+Interfaz simplificada con tres acciones principales, menú Cuenta y transferencias
+desplegables. [Guía](docs/INTERFACE.md).
