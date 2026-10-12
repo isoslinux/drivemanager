@@ -245,3 +245,8 @@ desplegables. [Guía](docs/INTERFACE.md).
 
 Notificaciones de escritorio con silencio persistente y deduplicación por cuenta.
 [Detalles](docs/NOTIFICATIONS.md).
+
+## Versión 1.13.0
+
+Consulta de espacio por cuenta con barra de capacidad y avisos de poco espacio.
+[Funcionamiento y límites](docs/STORAGE.md).

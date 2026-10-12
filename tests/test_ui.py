@@ -65,7 +65,7 @@ class UiSmoke(unittest.TestCase):
                 window.open_authorization()
                 self.assertEqual(opener.call_count, 2)
             window.cancel_authorization()
-            window.pool.shutdown()
+            window.quota_pool.shutdown();window.pool.shutdown()
             window.timer.stop()
             window.tray.hide()
             window.hide()
@@ -97,7 +97,7 @@ class DiagnosticsUi(unittest.TestCase):
             self.assertEqual(observed['text'],observed['clipboard'])
             self.assertIn('1.74.3',observed['text'])
             self.assertTrue(window.buttons['diagnostics'].isEnabled())
-            window.timer.stop();window.pool.shutdown();window.tray.hide();window.hide()
+            window.timer.stop();window.quota_pool.shutdown();window.pool.shutdown();window.tray.hide();window.hide()
 
 @unittest.skipUnless(os.environ.get('QT_QPA_PLATFORM') == 'offscreen', 'Set QT_QPA_PLATFORM=offscreen for UI smoke')
 class SimplifiedUi(unittest.TestCase):
@@ -138,7 +138,7 @@ class SimplifiedUi(unittest.TestCase):
                     submit.call_args.args[0]();load.assert_called_once_with('personal')
             self.assertTrue(window.buttons['cancel_oauth'].isHidden())
             self.assertTrue(window.buttons['oauth_open'].isHidden())
-            window.timer.stop();window.pool.shutdown();window.tray.hide();window.hide()
+            window.timer.stop();window.quota_pool.shutdown();window.pool.shutdown();window.tray.hide();window.hide()
     def test_new_oauth_controls_are_visible_and_hidden_on_completion(self):
         from PySide6.QtWidgets import QApplication
         from PySide6.QtCore import QTimer, QEventLoop
@@ -156,4 +156,41 @@ class SimplifiedUi(unittest.TestCase):
             loop=QEventLoop();QTimer.singleShot(350,loop.quit);loop.exec()
             self.assertTrue(window.buttons['cancel_oauth'].isHidden())
             self.assertTrue(window.buttons['oauth_open'].isHidden())
-            window.timer.stop();window.pool.shutdown();window.tray.hide();window.hide()
+            window.timer.stop();window.quota_pool.shutdown();window.pool.shutdown();window.tray.hide();window.hide()
+
+
+_quota_patch = None
+def setUpModule():
+    global _quota_patch
+    from drive_manager.quota import Quota
+    _quota_patch = patch('drive_manager.quota.read_quota', return_value=Quota())
+    _quota_patch.start()
+
+def tearDownModule():
+    _quota_patch.stop()
+
+@unittest.skipUnless(os.environ.get('QT_QPA_PLATFORM') == 'offscreen', 'Set QT_QPA_PLATFORM=offscreen for UI smoke')
+class QuotaUi(unittest.TestCase):
+    def test_capacity_selection_unknown_and_bar(self):
+        from PySide6.QtWidgets import QApplication
+        from PySide6.QtCore import QTimer,QEventLoop
+        from drive_manager.app import Window
+        from drive_manager.service import Status
+        from drive_manager.quota import Quota
+        app=QApplication.instance() or QApplication([])
+        with patch('drive_manager.service.Manager.discover_accounts',return_value=['personal','work']), \
+             patch('drive_manager.service.Manager.provider_of',return_value='drive'), \
+             patch('drive_manager.service.Manager.status',return_value=Status('unmounted','/demo')):
+            window=Window();window.show()
+            loop=QEventLoop();QTimer.singleShot(600,loop.quit);loop.exec()
+            window.accounts.setCurrentText('personal')
+            window.show_quota('personal',Quota(100,20,10,60,10))
+            self.assertEqual(window.quota_bar.value(),90)
+            self.assertFalse(window.quota_bar.isHidden())
+            self.assertIn(window.t['quota_low'],window.quota_label.text())
+            window.accounts.setCurrentText('work')
+            window.show_quota('personal',Quota(100,20,10))
+            self.assertTrue(window.quota_bar.isHidden())
+            window.show_quota('work',Quota())
+            self.assertEqual(window.quota_label.text(),window.t['quota_unknown'])
+            window.timer.stop();window.quota_pool.shutdown();window.pool.shutdown();window.tray.hide();window.hide()

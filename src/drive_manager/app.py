@@ -101,14 +101,14 @@ TEXT = {
 'starting':'Iniciando / reconectando', 'unmounted':'Desmontado', 'failed':'Montaje fallido'}}
 
 TEXT['en'].update({
-    'notifications': 'Desktop notifications', 'notification_settings_error': 'Could not save notification preference.', 'uploads_done': 'Observed upload queue is now empty.', 'notice_auth': 'Authentication needs attention. Open the app and reauthorize this account when safe.', 'notice_error': 'A transfer failed. Keep the connection and cache while changes remain pending.', 'file_name': 'File', 'account_menu': 'Account', 'diagnostics': 'Diagnostics', 'copy_report': 'Copy report', 'close_report': 'Close',
+    'capacity': 'Storage', 'quota_refresh': 'Refresh space', 'quota_loading': 'Checking storage…', 'quota_unknown': 'Storage: Not available', 'quota_used': 'Used', 'quota_free': 'Available', 'quota_total': 'Total', 'quota_other': 'Other services', 'quota_trash': 'Trash', 'quota_low': 'Low available space', 'notifications': 'Desktop notifications', 'notification_settings_error': 'Could not save notification preference.', 'uploads_done': 'Observed upload queue is now empty.', 'notice_auth': 'Authentication needs attention. Open the app and reauthorize this account when safe.', 'notice_error': 'A transfer failed. Keep the connection and cache while changes remain pending.', 'file_name': 'File', 'account_menu': 'Account', 'diagnostics': 'Diagnostics', 'copy_report': 'Copy report', 'close_report': 'Close',
     'upgrade_confirm': 'Allow this connection to modify your cloud files? Your browser will open to authorize read/write access. Sign in with the SAME account. Cancelling keeps the current mode.',
     'reauth': 'Reauthorize account',
     'reauth_confirm': 'Sign in with the SAME account as this connection. Its folder, cache and settings will be kept. The connection must be disconnected, with no pending uploads. Continue?',
     'reauth_error': 'Could not renew authorization. Use a disconnected Google Drive or OneDrive connection created by this app, without custom OAuth credentials. The original connection has been preserved.',
     'reauth_identity': 'The selected OneDrive belongs to another drive. The original connection has been preserved.'})
 TEXT['es'].update({
-    'notifications': 'Notificaciones de escritorio', 'notification_settings_error': 'No se pudo guardar el ajuste de notificaciones.', 'uploads_done': 'La cola de subidas observada ha quedado vacía.', 'notice_auth': 'La autenticación requiere atención. Abre la aplicación y reautoriza esta cuenta cuando sea seguro.', 'notice_error': 'Falló una transferencia. Conserva la conexión y la caché mientras queden cambios pendientes.', 'file_name': 'Archivo', 'account_menu': 'Cuenta', 'diagnostics': 'Diagnóstico', 'copy_report': 'Copiar informe', 'close_report': 'Cerrar',
+    'capacity': 'Espacio', 'quota_refresh': 'Actualizar espacio', 'quota_loading': 'Consultando espacio…', 'quota_unknown': 'Espacio: No disponible', 'quota_used': 'Usado', 'quota_free': 'Disponible', 'quota_total': 'Total', 'quota_other': 'Otros servicios', 'quota_trash': 'Papelera', 'quota_low': 'Poco espacio disponible', 'notifications': 'Notificaciones de escritorio', 'notification_settings_error': 'No se pudo guardar el ajuste de notificaciones.', 'uploads_done': 'La cola de subidas observada ha quedado vacía.', 'notice_auth': 'La autenticación requiere atención. Abre la aplicación y reautoriza esta cuenta cuando sea seguro.', 'notice_error': 'Falló una transferencia. Conserva la conexión y la caché mientras queden cambios pendientes.', 'file_name': 'Archivo', 'account_menu': 'Cuenta', 'diagnostics': 'Diagnóstico', 'copy_report': 'Copiar informe', 'close_report': 'Cerrar',
     'upgrade_confirm': '¿Permitir que esta conexión modifique tus archivos en la nube? Se abrirá el navegador para autorizar lectura/escritura. Inicia sesión con la MISMA cuenta. Cancelar conserva el modo actual.',
     'reauth': 'Reautorizar cuenta',
     'reauth_confirm': 'Inicia sesión con la MISMA cuenta de esta conexión. Se conservarán su carpeta, caché y ajustes. Debe estar desconectada y sin subidas pendientes. ¿Continuar?',
@@ -126,6 +126,10 @@ class Window(QMainWindow):
         self.notification_settings = NotificationSettings(self.manager.home)
         self.notifications_enabled = self.notification_settings.load()
         self.pool = ThreadPoolExecutor(max_workers=1)
+        self.quota_pool = ThreadPoolExecutor(max_workers=1)
+        self.quota_future = None
+        self.quota_cache = {}
+        self.quota_warned = set()
         self.future = None
         self.polling = False
         self.pending_action = None
@@ -184,6 +188,14 @@ class Window(QMainWindow):
         self.accounts.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.accounts.customContextMenuRequested.connect(self.open_account_menu)
         self.label = QLabel(); self.label.setWordWrap(True); layout.addWidget(self.label)
+        quota_header = QHBoxLayout()
+        self.quota_label = QLabel(self.t['quota_unknown']); self.quota_label.setWordWrap(True)
+        quota_header.addWidget(self.quota_label, 1)
+        self.quota_refresh = QToolButton(); self.quota_refresh.setText(self.t['quota_refresh'])
+        self.quota_refresh.clicked.connect(self.refresh_quota); quota_header.addWidget(self.quota_refresh)
+        layout.addLayout(quota_header)
+        self.quota_bar = QProgressBar(); self.quota_bar.setRange(0,100); self.quota_bar.hide()
+        layout.addWidget(self.quota_bar)
         oauth_row = QHBoxLayout()
         for key, callback in [('cancel_oauth', self.cancel_authorization), ('oauth_open', self.open_authorization)]:
             control = button(key, callback, oauth_row); control.setEnabled(False); control.hide()
@@ -289,6 +301,7 @@ class Window(QMainWindow):
             self.label.setText(self.t['browser_error'])
 
     def tick(self):
+        self.tick_quota()
         try:
             while True:
                 choices, event, answer, cancel = self.drive_requests.get_nowait()
@@ -364,6 +377,60 @@ class Window(QMainWindow):
         if self.poll_ticks >= 8:
             self.poll_ticks = 0; self.poll()
 
+    def refresh_quota(self):
+        self.quota_cache.pop(self.accounts.currentText(), None)
+        self.request_quota()
+
+    def request_quota(self):
+        import time
+        remote = self.accounts.currentText()
+        self.quota_bar.hide()
+        if not remote:
+            self.quota_label.setText(self.t['quota_unknown']); return
+        cached = self.quota_cache.get(remote)
+        if cached is not None and time.monotonic()-cached[0] < 300:
+            self.show_quota(remote, cached[1]); return
+        self.quota_label.setText(self.t['quota_loading'])
+        if self.quota_future is not None: return
+        from .quota import read_quota
+        self.quota_remote = remote
+        self.quota_future = self.quota_pool.submit(read_quota, self.manager, remote)
+        self.quota_refresh.setEnabled(False)
+
+    def tick_quota(self):
+        if self.quota_future is None or not self.quota_future.done(): return
+        import time
+        from .quota import Quota
+        future, self.quota_future = self.quota_future, None
+        remote = self.quota_remote
+        try: quota = future.result()
+        except Exception: quota = Quota()
+        names = [self.accounts.item(row,0).text() for row in range(self.accounts.rowCount())]
+        self.quota_refresh.setEnabled(True)
+        if remote in names:
+            self.quota_cache[remote] = (time.monotonic(), quota)
+            if quota.low and remote not in self.quota_warned:
+                self.quota_warned.add(remote)
+                if self.notifications_enabled and self.tray.isSystemTrayAvailable() and self.tray.supportsMessages():
+                    self.tray.showMessage('Drive Manager · '+''.join(c for c in remote if c.isalnum() or c in '_- ')[:48], self.t['quota_low'], QSystemTrayIcon.MessageIcon.Warning, 6000)
+            elif not quota.low and quota.free is not None:
+                self.quota_warned.discard(remote)
+        if remote == self.accounts.currentText(): self.show_quota(remote, quota)
+        elif self.accounts.currentText(): self.request_quota()
+
+    def show_quota(self, remote, quota):
+        if remote != self.accounts.currentText(): return
+        from .quota import size
+        fields = [(self.t['quota_'+key],getattr(quota,key)) for key in ('used','free','total','other')]
+        fields.append((self.t['quota_trash'],quota.trashed))
+        values = [label+': '+size(value) for label,value in fields if value is not None]
+        self.quota_label.setText((' · '.join(values) if values else self.t['quota_unknown'])
+            + ('\n'+self.t['quota_low'] if quota.low else ''))
+        percentage = quota.percentage
+        self.quota_bar.setVisible(percentage is not None)
+        if percentage is not None:
+            self.quota_bar.setValue(percentage); self.quota_bar.setFormat(self.t['capacity']+' %p%')
+
     def diagnose(self):
         from .diagnostics import collect
         remote = self.accounts.currentText()
@@ -392,13 +459,17 @@ class Window(QMainWindow):
     def set_accounts(self, names, selected=None):
         self.account_states.clear()
         self.notice_tracker.retain(names)
+        self.quota_cache = {name:value for name,value in self.quota_cache.items() if name in names}
+        self.quota_warned.intersection_update(names)
         current = selected or self.accounts.currentText()
         self.accounts.blockSignals(True); self.accounts.clear(); self.accounts.addItems(names)
         if current in names: self.accounts.setCurrentText(current)
         self.accounts.blockSignals(False)
-        if names: self.poll()
+        if names:
+            self.poll(); self.request_quota()
         else:
             self.account_menu_button.setEnabled(False)
+            self.quota_label.setText(self.t['quota_unknown']); self.quota_bar.hide()
             self.label.setText(self.t['empty'])
             self.transfer_table.clear(); self.progress_bar.hide()
             for key in ('mount', 'unmount', 'settings', 'open', 'delete', 'reauth'):
@@ -406,6 +477,7 @@ class Window(QMainWindow):
 
     def selection_changed(self):
         self.last_error = False
+        self.request_quota()
         remote = self.accounts.currentText()
         if remote in self.account_states:
             self.show_status(self.account_states[remote])
@@ -694,6 +766,7 @@ class Window(QMainWindow):
         if self.pending_registration is not None:
             self.pending_registration[1].unlink(missing_ok=True)
             self.pending_registration = None
+        self.quota_pool.shutdown(wait=False, cancel_futures=True)
         self.pool.shutdown(wait=False, cancel_futures=True)
         QApplication.instance().quit()
 
