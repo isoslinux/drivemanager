@@ -101,14 +101,14 @@ TEXT = {
 'starting':'Iniciando / reconectando', 'unmounted':'Desmontado', 'failed':'Montaje fallido'}}
 
 TEXT['en'].update({
-    'file_name': 'File', 'account_menu': 'Account', 'diagnostics': 'Diagnostics', 'copy_report': 'Copy report', 'close_report': 'Close',
+    'notifications': 'Desktop notifications', 'notification_settings_error': 'Could not save notification preference.', 'uploads_done': 'Observed upload queue is now empty.', 'notice_auth': 'Authentication needs attention. Open the app and reauthorize this account when safe.', 'notice_error': 'A transfer failed. Keep the connection and cache while changes remain pending.', 'file_name': 'File', 'account_menu': 'Account', 'diagnostics': 'Diagnostics', 'copy_report': 'Copy report', 'close_report': 'Close',
     'upgrade_confirm': 'Allow this connection to modify your cloud files? Your browser will open to authorize read/write access. Sign in with the SAME account. Cancelling keeps the current mode.',
     'reauth': 'Reauthorize account',
     'reauth_confirm': 'Sign in with the SAME account as this connection. Its folder, cache and settings will be kept. The connection must be disconnected, with no pending uploads. Continue?',
     'reauth_error': 'Could not renew authorization. Use a disconnected Google Drive or OneDrive connection created by this app, without custom OAuth credentials. The original connection has been preserved.',
     'reauth_identity': 'The selected OneDrive belongs to another drive. The original connection has been preserved.'})
 TEXT['es'].update({
-    'file_name': 'Archivo', 'account_menu': 'Cuenta', 'diagnostics': 'Diagnóstico', 'copy_report': 'Copiar informe', 'close_report': 'Cerrar',
+    'notifications': 'Notificaciones de escritorio', 'notification_settings_error': 'No se pudo guardar el ajuste de notificaciones.', 'uploads_done': 'La cola de subidas observada ha quedado vacía.', 'notice_auth': 'La autenticación requiere atención. Abre la aplicación y reautoriza esta cuenta cuando sea seguro.', 'notice_error': 'Falló una transferencia. Conserva la conexión y la caché mientras queden cambios pendientes.', 'file_name': 'Archivo', 'account_menu': 'Cuenta', 'diagnostics': 'Diagnóstico', 'copy_report': 'Copiar informe', 'close_report': 'Cerrar',
     'upgrade_confirm': '¿Permitir que esta conexión modifique tus archivos en la nube? Se abrirá el navegador para autorizar lectura/escritura. Inicia sesión con la MISMA cuenta. Cancelar conserva el modo actual.',
     'reauth': 'Reautorizar cuenta',
     'reauth_confirm': 'Inicia sesión con la MISMA cuenta de esta conexión. Se conservarán su carpeta, caché y ajustes. Debe estar desconectada y sin subidas pendientes. ¿Continuar?',
@@ -121,6 +121,10 @@ class Window(QMainWindow):
         import locale
         self.t = TEXT['es' if (locale.getlocale()[0] or '').startswith('es') else 'en']
         self.manager = Manager(Runner())
+        from .notifications import Tracker, NotificationSettings
+        self.notice_tracker = Tracker()
+        self.notification_settings = NotificationSettings(self.manager.home)
+        self.notifications_enabled = self.notification_settings.load()
         self.pool = ThreadPoolExecutor(max_workers=1)
         self.future = None
         self.polling = False
@@ -187,7 +191,11 @@ class Window(QMainWindow):
         self.transfer_toggle = QToolButton(); self.transfer_toggle.setText(self.t['transfers'])
         self.transfer_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.transfer_toggle.setCheckable(True); self.transfer_toggle.setArrowType(Qt.ArrowType.RightArrow)
-        layout.addWidget(self.transfer_toggle)
+        transfer_header = QHBoxLayout(); transfer_header.addWidget(self.transfer_toggle)
+        transfer_header.addStretch()
+        self.notification_checkbox = QCheckBox(self.t['notifications'])
+        self.notification_checkbox.setChecked(self.notifications_enabled)
+        transfer_header.addWidget(self.notification_checkbox); layout.addLayout(transfer_header)
         self.transfer_panel = QWidget(); transfers_layout = QVBoxLayout(self.transfer_panel)
         transfers_layout.setContentsMargins(0, 0, 0, 0)
         self.transfer_table = AccountList([self.t['file_name'],'%','KiB/s','ETA'], stretch_column=0)
@@ -200,12 +208,42 @@ class Window(QMainWindow):
         menu = QMenu(self)
         show = QAction(self.t['title'], self); show.triggered.connect(self.showNormal); menu.addAction(show)
         quit_action = QAction(self.t['quit'], self); quit_action.triggered.connect(self.quit); menu.addAction(quit_action)
+        menu.addSeparator()
+        self.notification_action = QAction(self.t['notifications'], self)
+        self.notification_action.setCheckable(True)
+        self.notification_action.setChecked(self.notifications_enabled)
+        self.notification_action.toggled.connect(self.set_notifications)
+        self.notification_checkbox.toggled.connect(self.set_notifications)
+        menu.addAction(self.notification_action)
+        self.tray.messageClicked.connect(self.showNormal)
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(lambda reason: self.showNormal())
         if self.tray.isSystemTrayAvailable(): self.tray.show()
         self.timer = QTimer(self); self.timer.timeout.connect(self.tick); self.timer.start(250)
         self.poll_ticks = 0
         self.refresh()
+
+    def set_notifications(self, enabled):
+        previous = self.notifications_enabled
+        try:
+            # A tiny atomic local preference write also works while OAuth is busy.
+            self.notification_settings.save(enabled)
+            self.notifications_enabled = enabled
+        except (OperationError, OSError):
+            enabled = previous
+            self.label.setText(self.t['notification_settings_error'])
+        for control in (self.notification_action, self.notification_checkbox):
+            control.blockSignals(True); control.setChecked(enabled); control.blockSignals(False)
+
+    def notify_status(self, remote, status):
+        notices = self.notice_tracker.observe(remote, status)
+        if not self.notifications_enabled or not self.tray.isSystemTrayAvailable() or not self.tray.supportsMessages():
+            return
+        for notice in notices:
+            key = {'uploads_done':'uploads_done','auth_required':'notice_auth','transfer_error':'notice_error'}[notice.event]
+            account = ''.join(c for c in remote if c.isalnum() or c in '_- ')[:48]
+            self.tray.showMessage('Drive Manager · '+account, self.t[key],
+                QSystemTrayIcon.MessageIcon.Information if notice.event=='uploads_done' else QSystemTrayIcon.MessageIcon.Warning, 6000)
 
     def toggle_transfers(self, expanded):
         self.transfer_panel.setVisible(expanded)
@@ -353,6 +391,7 @@ class Window(QMainWindow):
 
     def set_accounts(self, names, selected=None):
         self.account_states.clear()
+        self.notice_tracker.retain(names)
         current = selected or self.accounts.currentText()
         self.accounts.blockSignals(True); self.accounts.clear(); self.accounts.addItems(names)
         if current in names: self.accounts.setCurrentText(current)
@@ -387,6 +426,7 @@ class Window(QMainWindow):
         labels={provider.key:provider.label for provider in PROVIDERS}
         for name,provider,status in rows:
             self.account_states[name] = status
+            self.notify_status(name, status)
             self.accounts.update_account(name,labels.get(provider,provider),status.path,
                 '—' if status.state=='external' else self.t['mode_rw' if status.writable else 'mode_ro'],
                 self.t[status.progress.state] if status.progress is not None else self.t['mounted_rw' if status.writable and status.state=='mounted' else status.state])

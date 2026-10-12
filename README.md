@@ -240,3 +240,8 @@ Informe ES/EN que se puede copiar sin credenciales ni datos personales.
 
 Interfaz simplificada con tres acciones principales, menú Cuenta y transferencias
 desplegables. [Guía](docs/INTERFACE.md).
+
+## Versión 1.12.0
+
+Notificaciones de escritorio con silencio persistente y deduplicación por cuenta.
+[Detalles](docs/NOTIFICATIONS.md).

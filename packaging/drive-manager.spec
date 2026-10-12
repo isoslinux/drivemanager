@@ -1,5 +1,5 @@
 Name:           drive-manager
-Version:        1.11.0
+Version:        1.12.0
 Release:        1%{?dist}
 Summary:        Google Drive desktop mount manager for KDE
 License:        MIT
@@ -46,6 +46,9 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src %{python3} -m unittest discover -s test
 %{_datadir}/applications/drive-manager.desktop
 
 %changelog
+* Mon Oct 12 2026 Drive Manager contributors - 1.12.0-1
+- Add deduplicated native notifications with persistent mute preference
+
 * Mon Oct 12 2026 Drive Manager contributors - 1.11.0-1
 - Simplify main actions, add account menu and collapsible transfers
 
