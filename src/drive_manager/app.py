@@ -99,6 +99,17 @@ TEXT = {
 'busy':'Procesando…', 'mounted':'Montado (solo lectura)', 'external':'Montaje/servicio externo',
 'starting':'Iniciando / reconectando', 'unmounted':'Desmontado', 'failed':'Montaje fallido'}}
 
+TEXT['en'].update({
+    'reauth': 'Reauthorize account',
+    'reauth_confirm': 'Sign in with the SAME account as this connection. Its folder, cache and settings will be kept. The connection must be disconnected, with no pending uploads. Continue?',
+    'reauth_error': 'Could not renew authorization. Use a disconnected Google Drive or OneDrive connection created by this app, without custom OAuth credentials. The original connection has been preserved.',
+    'reauth_identity': 'The selected OneDrive belongs to another drive. The original connection has been preserved.'})
+TEXT['es'].update({
+    'reauth': 'Reautorizar cuenta',
+    'reauth_confirm': 'Inicia sesión con la MISMA cuenta de esta conexión. Se conservarán su carpeta, caché y ajustes. Debe estar desconectada y sin subidas pendientes. ¿Continuar?',
+    'reauth_error': 'No se pudo renovar la autorización. Usa una conexión Google Drive o OneDrive creada por esta aplicación, desconectada y sin credenciales OAuth personalizadas. Se conserva la conexión original.',
+    'reauth_identity': 'La unidad OneDrive seleccionada es distinta. Se conserva la conexión original.'})
+
 class Window(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -140,7 +151,7 @@ class Window(QMainWindow):
         self.buttons = {}
         for key, callback in [('refresh', self.refresh), ('mount', self.mount),
                               ('unmount', self.unmount), ('open', self.open_folder),
-                              ('settings', self.edit_settings), ('delete', self.delete_connection), ('add', self.add_account),
+                              ('reauth', self.reauthorize_account), ('settings', self.edit_settings), ('delete', self.delete_connection), ('add', self.add_account),
                               ('cancel_oauth', self.cancel_authorization), ('oauth_open', self.open_authorization)]:
             button = QPushButton(self.t[key]); button.clicked.connect(callback)
             layout.addWidget(button); self.buttons[key] = button
@@ -238,7 +249,7 @@ class Window(QMainWindow):
                 # Raw diagnostics may contain OAuth secrets. Never display or log them.
                 self.last_error = True
                 key = self.error_key
-                if isinstance(error, OperationError) and str(error) in {'uploads_pending','uploads_unknown','files_open','needs_write_auth'}:
+                if isinstance(error, OperationError) and str(error) in {'uploads_pending','uploads_unknown','files_open','needs_write_auth','reauth_identity'}:
                     key = str(error)
                 if isinstance(error, AuthorizationError): key = error.key
                 elif key == 'auth_error' and isinstance(error, OperationError):
@@ -267,7 +278,7 @@ class Window(QMainWindow):
         else:
             self.label.setText(self.t['empty'])
             self.transfer_table.clear(); self.progress_bar.hide()
-            for key in ('mount', 'unmount', 'settings', 'open', 'delete'):
+            for key in ('mount', 'unmount', 'settings', 'open', 'delete', 'reauth'):
                 self.buttons[key].setEnabled(False)
 
     def selection_changed(self):
@@ -317,6 +328,7 @@ class Window(QMainWindow):
         self.tray.setToolTip(self.t[detail.state] if detail is not None else self.t[status.state])
         self.tray.setIcon(QIcon.fromTheme('drive-harddisk' if status.managed else 'network-server'))
         self.buttons['mount'].setEnabled(status.state in {'unmounted', 'failed'})
+        self.buttons['reauth'].setEnabled(self.manager.is_app_account(self.accounts.currentText()) and status.state in {'unmounted', 'failed'})
         self.buttons['settings'].setEnabled(status.state in {'unmounted', 'failed'})
         self.buttons['unmount'].setEnabled(status.managed)
         self.buttons['delete'].setEnabled(status.managed or status.state in {'unmounted', 'failed'})
@@ -396,6 +408,22 @@ class Window(QMainWindow):
         while not event.wait(.2):
             if cancel.is_set() or time.monotonic() > deadline: return None
         return answer.get('value')
+
+    def reauthorize_account(self):
+        remote = self.accounts.currentText()
+        if not remote: return
+        if QMessageBox.question(self, self.t['reauth'], self.t['reauth_confirm'],
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            return
+        from threading import Event
+        self.browser_url = None
+        while not self.oauth_urls.empty(): self.oauth_urls.get_nowait()
+        cancel = Event(); self.oauth_cancel = cancel
+        self.label.setText(self.t['auth_wait'])
+        self.submit(lambda: self.manager.reauthorize(remote, cancel, self.oauth_urls.put,
+                    self.ask_onedrive_drive, confirmed=True),
+                    lambda names: self.set_accounts(names, remote), 'reauth_error')
 
     def add_account(self):
         self.auth_write = self.access_mode.currentIndex() == 1

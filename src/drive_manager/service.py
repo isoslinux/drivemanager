@@ -74,6 +74,68 @@ class Manager:
                 raise OperationError("Authorization cancelled")
             return remote, staged
 
+    def reauthorize(self, remote, cancel, on_url, ask_drive=None, confirmed=False):
+        """Replace only OAuth credentials after explicit same-account confirmation.
+
+        External configurations and Internxt credentials are outside this workflow.
+        Failed/cancelled authorization leaves the original configuration untouched.
+        """
+        if not confirmed:
+            raise OperationError('Explicit same-account confirmation required')
+        import configparser
+        with self.lock():
+            if not self.is_app_account(remote):
+                raise OperationError('reauth_error')
+            if self.status(remote).state not in {'unmounted', 'failed'}:
+                raise OperationError('reauth_error')
+            self.ensure_no_dirty_cache(remote)
+            path = self.accounts.path(remote)
+            if self.accounts.encrypted(path):
+                raise OperationError('reauth_error')
+            original = path.read_bytes()
+            old = configparser.ConfigParser(interpolation=None)
+            old.read_string(original.decode('utf-8'))
+            provider = old.get(remote, 'type', fallback='')
+            if provider not in {'drive', 'onedrive'}:
+                raise OperationError('reauth_error')
+            # Custom OAuth clients need their own authorization flow.
+            if any(old.get(remote, key, fallback='') for key in ('client_id', 'client_secret', 'service_account_file')):
+                raise OperationError('reauth_error')
+            writable = self.settings.load(remote).writable
+            if provider == 'drive':
+                writable = writable or old.get(remote, 'scope', fallback='drive') in {'drive', 'drive.file'}
+                staged = self.accounts.authorize(remote, cancel, on_url, writable)
+            else:
+                from .onedrive import authorize
+                writable = writable or 'ReadWrite' in old.get(remote, 'access_scopes', fallback='Files.ReadWrite')
+                staged = authorize(self.accounts, remote, cancel, on_url, ask_drive, writable)
+            try:
+                if staged.parent != self.accounts.folder or not staged.name.startswith('.oauth-') or staged.is_symlink():
+                    raise OperationError('reauth_error')
+                new = configparser.ConfigParser(interpolation=None)
+                new.read(staged)
+                if new.get(remote, 'type', fallback='') != provider or not new.get(remote, 'token', fallback=''):
+                    raise OperationError('reauth_error')
+                if provider == 'onedrive' and any(old.get(remote, key, fallback='') != new.get(remote, key, fallback='')
+                                                for key in ('drive_id', 'drive_type')):
+                    raise OperationError('reauth_identity')
+                # Keep root-folder, backend options, and every application preference.
+                for key in ('token', 'scope' if provider == 'drive' else 'access_scopes'):
+                    if new.has_option(remote, key):
+                        old.set(remote, key, new.get(remote, key))
+                with staged.open('w') as file:
+                    old.write(file); file.flush(); os.fsync(file.fileno())
+                if cancel.is_set() or not self.is_app_account(remote) or path.read_bytes() != original:
+                    raise OperationError('reauth_error')
+                if self.status(remote).state not in {'unmounted', 'failed'}:
+                    raise OperationError('reauth_error')
+                self.ensure_no_dirty_cache(remote)
+                staged.chmod(0o600)
+                os.replace(staged, path)
+            finally:
+                staged.unlink(missing_ok=True)
+            return self.discover_accounts()
+
     def add_account(self, remote, prefs, cancel, on_url=None, registration=None):
         with self.lock():
             self.accounts.validate_name(remote)

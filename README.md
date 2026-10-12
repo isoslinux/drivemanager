@@ -219,3 +219,8 @@ El refresco periódico ya no desactiva los botones; si se solicita una operació
 87 pruebas aprobadas, incluyendo datos de porcentaje/velocidad/ETA, valores desconocidos y no finitos, clasificación de fallos sin exponer secretos, errores históricos y presentación Qt del porcentaje. Comprobación con Rclone real sobre un backend local sintético: los estados pasaron de pendiente/subiendo a cola vacía al completar la escritura. La visualización con transferencias reales de tus proveedores queda pendiente de aceptación.
 
 Fuente: [estadísticas de transferencias de Rclone](https://rclone.org/rc/#core-stats-returns-stats-about-current-transfers).
+
+## Versión 1.8.0
+
+Reautorizar cuentas Google Drive y OneDrive conservando carpeta y ajustes.
+Consulta [las garantías y limitaciones](docs/REAUTHORIZATION.md).
