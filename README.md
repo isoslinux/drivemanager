@@ -1,7 +1,7 @@
 # Drive Manager
 
 A native desktop application for Fedora 44 KDE Plasma that manages Google Drive,
-Internxt and OneDrive as virtual folders using Python 3, PySide6, Rclone, FUSE and
+Internxt, OneDrive, Nextcloud, Dropbox and Proton Drive (experimental) as virtual folders using Python 3, PySide6, Rclone, FUSE and
 user systemd services. Each account has its own connection, folder and settings.
 
 The project documentation is in English. The application provides a persistent,
@@ -13,7 +13,7 @@ Download the `noarch.rpm` from [GitHub Releases](https://github.com/isoslinux/dr
 and open it with Discover, or install/update it from your download folder:
 
 ```bash
-sudo dnf install ./drive-manager-1.15.0-1.fc44.noarch.rpm
+sudo dnf install ./drive-manager-1.18.0-1.fc44.noarch.rpm
 ```
 
 Launch **Drive Manager** from the KDE application menu, as your normal user.
@@ -23,9 +23,12 @@ files are never included in this repository or the release package.
 ## Using the application
 
 - Choose a provider and access mode, then select **New connection**. Google Drive
-  and OneDrive open an external browser; Internxt uses credentials and KWallet.
+  OneDrive and Dropbox open an external browser; Internxt, Nextcloud and Proton Drive
+  use credentials and KWallet. See [provider setup and limitations](docs/PROVIDERS.md).
 - Select an account and use **Connect**, **Disconnect** or **Open in Dolphin**.
-- The **Account** menu contains settings, reauthorization and connection removal.
+- The **Account** menu contains **Check connection**, settings, browser reauthorization,
+  encrypted credential renewal and connection removal.
+  A manual check verifies root-folder read access without changing the original credentials.
 - Configure mount folder, cache targets, access mode and mounting at login per account.
 - Expand **Transfers** to inspect progress. Desktop notifications can be muted.
 - **Diagnostics** checks dependencies and local state with a copyable safe report.
@@ -68,7 +71,7 @@ not encrypted by this application. Mounts are never forced or lazily unmounted.
 Other tools can still race with local mount operations.
 
 A local mount or empty upload queue does not independently prove cloud connectivity.
-Quota availability depends on the provider. Encrypted Internxt connections need an
+Quota availability depends on the provider. Encrypted credential connections need an
 active managed mount for quota queries; background queries never unlock KWallet.
 
 ## Documentation and tests
@@ -81,6 +84,8 @@ active managed mount for quota queries; background queries never unlock KWallet.
 - [Notifications](docs/NOTIFICATIONS.md)
 - [Storage quotas](docs/STORAGE.md)
 - [Languages and translation maintenance](translations/README.md)
+- [Encrypted credential renewal](docs/CREDENTIALS.md)
+- [Connection checks](docs/CONNECTIVITY.md)
 - [Update checks](docs/UPDATES.md)
 - [Test plan](docs/testing.md) and [validation scope](docs/validation.md)
 
@@ -96,6 +101,10 @@ in the account owner's desktop session. See the validation document for the scop
 
 | Version | Main change |
 | --- | --- |
+| 1.18.0 | Renew encrypted credentials for the same Nextcloud, Proton and Internxt account |
+| 1.17.1 | Stable mount identities for backend option overrides |
+| 1.17.0 | Manual connection checks with safe errors and private snapshots |
+| 1.16.0 | Nextcloud, Dropbox and experimental Proton Drive connections |
 | 1.15.0 | Manual update checks with safe release/RPM links |
 | 1.14.0 | English project documentation and four selectable application languages |
 | 1.13.0 | Account quotas and low-space warnings |

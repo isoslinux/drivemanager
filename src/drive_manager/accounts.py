@@ -10,6 +10,7 @@ import tempfile
 from .process import OperationError
 from .remotes import discover
 from .oauth_output import OAuthOutput
+from .providers import ENCRYPTED_TYPES
 
 class AuthorizationError(OperationError):
     def __init__(self, key):
@@ -42,7 +43,7 @@ class Accounts:
             if self.encrypted(config):
                 try:
                     metadata=json.loads(config.with_suffix('.meta.json').read_text())
-                    if metadata.get('type')!='internxt': raise ValueError()
+                    if metadata.get('type') not in ENCRYPTED_TYPES: raise ValueError()
                     self.validate_name(metadata['name'])
                     if self.path(metadata['name'])!=config: raise ValueError()
                     names.append(metadata['name'])
@@ -56,7 +57,8 @@ class Accounts:
         if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,47}', name):
             raise OperationError('Use a unique name with letters, numbers, underscores or hyphens')
 
-    def authorize(self, remote, cancel, on_url=None, writable=False):
+    def authorize(self, remote, cancel, on_url=None, writable=False, provider="drive"):
+        if provider not in {"drive", "dropbox"}: raise OperationError("Unsupported provider")
         """Return a staged file. Caller commits or removes it under operation lock."""
         self.validate_name(remote)
         if cancel.is_set(): raise OperationError("Authorization cancelled")
@@ -70,8 +72,9 @@ class Accounts:
         process = None
         output = OAuthOutput(on_url)
         try:
-            process = subprocess.Popen(['rclone', 'config', 'create', remote, 'drive',
-                'scope='+('drive' if writable else 'drive.readonly'), 'config_is_local=true', 'config_auth_no_browser=true',
+            options = ['scope='+('drive' if writable else 'drive.readonly')] if provider == 'drive' else []
+            process = subprocess.Popen(['rclone', 'config', 'create', remote, provider,
+                *options, 'config_is_local=true', 'config_auth_no_browser=true',
                 '--config=' + temp, '--no-output', '--log-level=NOTICE'],
                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 env={k: v for k, v in os.environ.items() if not k.startswith('RCLONE_')},

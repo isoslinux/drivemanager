@@ -6,6 +6,9 @@
 flowchart TD
     UI[PySide6 window and tray] --> Operations[Serial operation worker]
     UI --> Quota[Separate quota worker]
+    UI --> Connectivity[Manual connection worker]
+    Connectivity --> Snapshot[Temporary private configuration]
+    Snapshot --> RootRead[Bounded root-directory read]
     UI --> Updates[Manual update worker]
     Updates --> GitHub[Public stable release metadata]
     Operations --> Manager[Account and mount policy]
@@ -29,13 +32,14 @@ flowchart TD
 | `remotes.py`, `providers.py` | Metadata discovery and provider registry |
 | `accounts.py`, `oauth_output.py` | Private registration staging, browser links and safe OAuth parsing |
 | `onedrive.py` | Noninteractive authorization state machine and drive selection |
-| `internxt.py`, `wallet.py` | Encrypted configuration and private Unix RC authentication with KWallet |
+| `credentials.py`, `internxt.py`, `wallet.py` | Encrypted configuration and private Unix RC authentication with KWallet |
 | `settings.py`, `autostart.py` | Private account preferences and optional graphical login launcher |
 | `mounts.py` | Parse mountinfo without recursively inspecting mounted folders |
 | `transfers.py` | Validate VFS statistics, dirty cache metadata, open-file protection and progress |
 | `diagnostics.py` | Allowlisted local checks and safe reports |
 | `notifications.py` | Per-account event deduplication and persistent mute preference |
 | `updates.py` | Manual public-release checks with safe links and no installation |
+| `connectivity.py` | Manual root-read checks, isolated credential snapshots, bounded process groups and safe errors |
 | `quota.py` | Isolated, bounded capacity queries and numeric validation |
 | `i18n.py`, `messages*.py` | Four complete UI catalogs, language persistence and Qt standard buttons |
 | `packaging/` | KDE launcher and Fedora RPM recipe without activation scripts |
@@ -64,7 +68,7 @@ Registration and reauthorization stage credentials before promotion. Failed or
 cancelled OAuth preserves the original connection. OneDrive checks the drive
 identity; Google requires explicit same-account selection by the user.
 
-Internxt configurations are encrypted before credentials are submitted over a
+Internxt, Nextcloud and Proton Drive configurations are encrypted before credentials are submitted over a
 private Unix socket. KWallet stores the encryption key. Secrets are not passed as
 command arguments, logged or included in reports. Private permissions protect
 against other users, not against the same user or root. Cache contents are not
@@ -92,3 +96,35 @@ automatic service restart by the application.
 
 Technical references: [Rclone mount](https://rclone.org/commands/rclone_mount/),
 [Rclone RC](https://rclone.org/rc/), [Rclone about](https://rclone.org/commands/rclone_about/).
+
+## Provider registration
+
+Dropbox reuses browser OAuth with backend-specific options. Nextcloud and Proton
+use validated parameters over the encrypted Unix RC workflow in `credentials.py`
+and `internxt.py`. A tuple-compatible registration result carries only the backend
+type for encrypted account metadata; no secrets are added to metadata. Configs
+are committed only after registration and folder validation. WebDAV and Proton
+registration also verifies root-directory access. Failed or cancelled staging is
+removed. Each backend retains the common mount ownership and upload protections.
+
+Dropbox mounts force synchronous batch commits. Proton mounts disable its internal
+metadata cache. See [provider setup and limitations](PROVIDERS.md).
+
+Connection checks use their own worker and never change account services. The UI
+keeps results per account and discards results for removed accounts; selection
+changes cannot display another account’s result. Language updates preserve action
+guards. Only explicit checks contact the cloud, using temporary credential copies.
+See [connection checks](CONNECTIVITY.md) for limits and result semantics.
+
+New mounts explicitly set `--devname=ACCOUNT:`. Backend overrides can otherwise
+make Rclone expose a suffixed remote name in mountinfo. A stable device name lets
+the existing source, path, FUSE type and service ownership checks recognize the
+mount without accepting arbitrary matching prefixes. Existing mounts are left
+untouched; the option takes effect on the next user-requested connection.
+
+Encrypted credential renewal reuses the private Unix RC staging workflow and the
+existing wallet key. The account principal is checked in memory before replacing
+login fields in the staged copy. Cached session tokens are removed, root reads
+validate fresh authentication, and the manager rechecks mount state, dirty cache,
+source bytes and metadata before atomic promotion. Preferences and cache files
+are never rewritten by renewal. See [credential renewal](CREDENTIALS.md).

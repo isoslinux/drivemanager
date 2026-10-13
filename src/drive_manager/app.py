@@ -35,6 +35,11 @@ class Window(QMainWindow):
         self.pool = ThreadPoolExecutor(max_workers=1)
         self.update_pool = ThreadPoolExecutor(max_workers=1)
         self.update_future = None
+        self.connection_pool = ThreadPoolExecutor(max_workers=1)
+        self.connection_future = None
+        self.connection_results = {}
+        from threading import Event
+        self.connection_cancel = Event()
         self.quota_pool = ThreadPoolExecutor(max_workers=1)
         self.quota_future = None
         self.quota_cache = {}
@@ -94,7 +99,7 @@ class Window(QMainWindow):
             button(key, callback, primary)
         primary.addStretch()
         self.account_menu = QMenu(self)
-        for key, callback in [('settings', self.edit_settings), ('reauth', self.reauthorize_account), ('delete', self.delete_connection)]:
+        for key, callback in [('check_connection', self.check_connection), ('settings', self.edit_settings), ('reauth', self.reauthorize_account), ('renew_credentials', self.renew_account_credentials), ('delete', self.delete_connection)]:
             if key == 'delete': self.account_menu.addSeparator()
             action = QAction(self.t[key], self); action.triggered.connect(callback)
             action.setEnabled(False); self.account_menu.addAction(action); self.buttons[key] = action
@@ -106,6 +111,8 @@ class Window(QMainWindow):
         self.accounts.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.accounts.customContextMenuRequested.connect(self.open_account_menu)
         self.label = QLabel(); self.label.setWordWrap(True); layout.addWidget(self.label)
+        self.connection_label = QLabel(); self.connection_label.setWordWrap(True)
+        layout.addWidget(self.connection_label)
         quota_header = QHBoxLayout()
         self.quota_label = QLabel(self.t['quota_unknown']); self.quota_label.setWordWrap(True)
         quota_header.addWidget(self.quota_label, 1)
@@ -197,6 +204,7 @@ class Window(QMainWindow):
         if loading_quota: self.quota_label.setText(self.t['quota_loading'])
         elif remote in self.quota_cache: self.show_quota(remote,self.quota_cache[remote][1])
         else: self.quota_label.setText(self.t['quota_unknown'])
+        self.show_connection_result(update_controls=False)
 
     def set_notifications(self, enabled):
         previous = self.notifications_enabled
@@ -264,6 +272,7 @@ class Window(QMainWindow):
             self.label.setText(self.t['browser_error'])
 
     def tick(self):
+        self.tick_connection()
         self.tick_updates()
         self.tick_quota()
         try:
@@ -327,9 +336,9 @@ class Window(QMainWindow):
                 if isinstance(error, OperationError) and str(error) in {'uploads_pending','uploads_unknown','files_open','needs_write_auth','reauth_identity'}:
                     key = str(error)
                 if isinstance(error, AuthorizationError): key = error.key
-                elif key == 'auth_error' and isinstance(error, OperationError):
+                elif key in {'auth_error', 'credentials_error'} and isinstance(error, OperationError):
                     message = str(error)
-                    if message in {'wallet_error', 'internxt_error'}: key = message
+                    if message in {'wallet_error', 'internxt_error', 'credentials_error', 'webdav_url_error', 'credential_identity', 'credential_custom', 'credential_renew_error', 'credential_confirm'}: key = message
                     if message in {'Connection name already exists', 'Use a unique name with letters, numbers, underscores or hyphens'}:
                         key = 'name_error'
                     elif any(word in message.lower() for word in ('folder', 'path', 'preferences')):
@@ -380,6 +389,38 @@ class Window(QMainWindow):
         layout.addLayout(actions)
         # Keep transfer polling active while this read-only dialog is open.
         dialog.exec()
+
+    def check_connection(self):
+        remote = self.accounts.currentText()
+        if not remote or self.connection_future is not None: return
+        from .connectivity import check
+        from threading import Event
+        self.connection_cancel = Event()
+        self.connection_remote = remote
+        self.connection_future = self.connection_pool.submit(check, self.manager, remote, self.connection_cancel)
+        self.show_connection_result()
+
+    def show_connection_result(self, update_controls=True):
+        remote = self.accounts.currentText()
+        loading = self.connection_future is not None and self.connection_remote == remote
+        result = self.connection_results.get(remote)
+        if update_controls:
+            self.buttons['check_connection'].setEnabled(bool(remote) and self.connection_future is None)
+        if loading: self.connection_label.setText(self.t['connection_checking'])
+        elif result is not None:
+            self.connection_label.setText(self.t['connection_last'] + ' · ' + self.t[result.state] + (' · '+self.t['connection_elapsed'].format(seconds=result.seconds) if result.seconds else ''))
+        else: self.connection_label.clear()
+
+    def tick_connection(self):
+        if self.connection_future is None or not self.connection_future.done(): return
+        from .connectivity import Result
+        future, self.connection_future = self.connection_future, None
+        try: result = future.result()
+        except Exception: result = Result('connection_error')
+        names = [self.accounts.item(row,0).text() for row in range(self.accounts.rowCount())]
+        if self.connection_remote in names:
+            self.connection_results[self.connection_remote] = result
+        self.show_connection_result()
 
     def refresh_quota(self):
         self.quota_cache.pop(self.accounts.currentText(), None)
@@ -462,6 +503,7 @@ class Window(QMainWindow):
 
     def set_accounts(self, names, selected=None):
         self.account_states.clear()
+        self.connection_results = {name:result for name,result in self.connection_results.items() if name in names}
         self.notice_tracker.retain(names)
         self.quota_cache = {name:value for name,value in self.quota_cache.items() if name in names}
         self.quota_warned.intersection_update(names)
@@ -470,16 +512,19 @@ class Window(QMainWindow):
         if current in names: self.accounts.setCurrentText(current)
         self.accounts.blockSignals(False)
         if names:
+            self.show_connection_result()
             self.poll(); self.request_quota()
         else:
             self.account_menu_button.setEnabled(False)
             self.quota_label.setText(self.t['quota_unknown']); self.quota_bar.hide()
+            self.connection_label.clear()
             self.label.setText(self.t['empty'])
             self.transfer_table.clear(); self.progress_bar.hide()
-            for key in ('mount', 'unmount', 'settings', 'open', 'delete', 'reauth'):
+            for key in ('mount', 'unmount', 'settings', 'open', 'delete', 'reauth', 'check_connection', 'renew_credentials'):
                 self.buttons[key].setEnabled(False)
 
     def selection_changed(self):
+        self.show_connection_result()
         self.last_error = False
         self.request_quota()
         remote = self.accounts.currentText()
@@ -487,7 +532,7 @@ class Window(QMainWindow):
             self.show_status(self.account_states[remote])
         else:
             self.account_menu_button.setEnabled(False)
-            for key in ('mount', 'unmount', 'open', 'settings', 'reauth', 'delete'):
+            for key in ('mount', 'unmount', 'open', 'settings', 'reauth', 'renew_credentials', 'delete'):
                 self.buttons[key].setEnabled(False)
         self.poll()
 
@@ -531,8 +576,14 @@ class Window(QMainWindow):
                 self.progress_bar.show()
         self.tray.setToolTip(self.t[detail.state] if detail is not None else self.t[status.state])
         self.tray.setIcon(QIcon.fromTheme('drive-harddisk' if status.managed else 'network-server'))
+        self.show_connection_result()
         self.buttons['mount'].setEnabled(status.state in {'unmounted', 'failed'})
-        self.buttons['reauth'].setEnabled(self.manager.is_app_account(self.accounts.currentText()) and status.state in {'unmounted', 'failed'})
+        self.buttons['reauth'].setEnabled(self.manager.is_app_account(self.accounts.currentText())
+            and not self.manager.accounts.encrypted(self.manager.accounts.path(self.accounts.currentText()))
+            and status.state in {'unmounted', 'failed'})
+        self.buttons['renew_credentials'].setEnabled(self.manager.is_app_account(self.accounts.currentText())
+            and self.manager.accounts.encrypted(self.manager.accounts.path(self.accounts.currentText()))
+            and status.state in {'unmounted','failed'})
         self.buttons['settings'].setEnabled(status.state in {'unmounted', 'failed'})
         self.buttons['unmount'].setEnabled(status.managed)
         self.buttons['delete'].setEnabled(status.managed or status.state in {'unmounted', 'failed'})
@@ -626,10 +677,10 @@ class Window(QMainWindow):
             if cancel.is_set() or time.monotonic() > deadline: return ''
         return answer.get('code', '')
 
-    def internxt_login(self):
+    def internxt_login(self, renewal=None):
         dialog = QDialog(self); dialog.setWindowTitle('Internxt')
         form = QFormLayout(dialog)
-        name = QLineEdit('internxt'); email = QLineEdit(); password = QLineEdit()
+        name = QLineEdit(renewal or 'internxt'); name.setReadOnly(renewal is not None); email = QLineEdit(); password = QLineEdit()
         password.setEchoMode(QLineEdit.EchoMode.Password)
         form.addRow(self.t['name'], name); form.addRow(self.t['email'], email); form.addRow(self.t['password'], password)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
@@ -642,8 +693,52 @@ class Window(QMainWindow):
         from threading import Event
         cancel = Event(); self.oauth_cancel = cancel
         self.label.setText(self.t['internxt_wait'])
-        self.submit(lambda: self.manager.begin_internxt(remote, user, secret, cancel, self.ask_internxt_code),
-                    self.connection_details, 'auth_error')
+        if renewal is not None:
+            self.submit(lambda:self.manager.renew_credentials(remote,user,secret,cancel,confirmed=True,ask_code=self.ask_internxt_code),
+                        lambda names:self.credentials_renewed(names,remote),'credentials_error')
+        else:
+            self.submit(lambda: self.manager.begin_internxt(remote, user, secret, cancel, self.ask_internxt_code),
+                        self.connection_details, 'auth_error')
+
+    def credentials_login(self, provider, renewal=None):
+        dialog = QDialog(self)
+        dialog.setWindowTitle('Nextcloud' if provider == 'webdav' else 'Proton Drive (beta)')
+        dialog.setMinimumWidth(520)
+        form = QFormLayout(dialog)
+        name = QLineEdit(renewal or ('nextcloud' if provider == 'webdav' else 'proton'));name.setReadOnly(renewal is not None)
+        user = QLineEdit(); password = QLineEdit()
+        password.setEchoMode(QLineEdit.EchoMode.Password)
+        form.addRow(self.t['name'], name)
+        url = QLineEdit(); code = QLineEdit(); mailbox = QLineEdit()
+        code.setEchoMode(QLineEdit.EchoMode.Password); mailbox.setEchoMode(QLineEdit.EchoMode.Password)
+        if provider == 'webdav':
+            url.setPlaceholderText('https://cloud.example/remote.php/dav/files/username/')
+            form.addRow(self.t['webdav_url'], url)
+        form.addRow(self.t['username'], user)
+        form.addRow(self.t['app_password'] if provider == 'webdav' else self.t['password'], password)
+        if provider == 'protondrive':
+            form.addRow(self.t['optional_2fa'], code); form.addRow(self.t['mailbox_password'], mailbox)
+        note = QLabel(self.t['nextcloud_note'] if provider == 'webdav' else self.t['proton_note'])
+        note.setWordWrap(True); form.addRow(note)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept); buttons.rejected.connect(dialog.reject); form.addRow(buttons)
+        self.timer.stop()
+        try: accepted = dialog.exec() == QDialog.DialogCode.Accepted
+        finally: self.timer.start(250)
+        if not accepted:
+            password.clear(); code.clear(); mailbox.clear(); return
+        remote = name.text().strip(); username = user.text().strip(); secret = password.text()
+        options = {'url':url.text(), 'code':code.text(), 'mailbox_password':mailbox.text()}
+        password.clear(); code.clear(); mailbox.clear()
+        from threading import Event
+        cancel = Event(); self.oauth_cancel = cancel
+        self.label.setText(self.t['credentials_wait'])
+        if renewal is not None:
+            self.submit(lambda:self.manager.renew_credentials(remote,username,secret,cancel,confirmed=True,**options),
+                        lambda names:self.credentials_renewed(names,remote),'credentials_error')
+        else:
+            self.submit(lambda: self.manager.begin_credentials(remote, provider, username, secret, cancel, **options),
+                        self.connection_details, 'credentials_error')
 
     def ask_onedrive_drive(self, choices, cancel):
         from threading import Event
@@ -653,6 +748,23 @@ class Window(QMainWindow):
         while not event.wait(.2):
             if cancel.is_set() or time.monotonic() > deadline: return None
         return answer.get('value')
+
+    def credentials_renewed(self, names, remote):
+        self.connection_results.pop(remote,None)
+        self.set_accounts(names,remote)
+
+    def renew_account_credentials(self):
+        remote=self.accounts.currentText()
+        if not remote:return
+        if QMessageBox.question(self,self.t['renew_credentials'],self.t['credential_confirm'],
+                QMessageBox.StandardButton.Yes|QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No)!=QMessageBox.StandardButton.Yes:return
+        try:provider=self.manager.encrypted_provider(remote)
+        except OperationError:
+            self.label.setText(self.t['credential_renew_error']);return
+        if self.connection_future is not None and self.connection_remote==remote:self.connection_cancel.set()
+        if provider=='internxt':self.internxt_login(renewal=remote)
+        else:self.credentials_login(provider,renewal=remote)
 
     def reauthorize_account(self):
         remote = self.accounts.currentText()
@@ -674,6 +786,8 @@ class Window(QMainWindow):
         self.auth_write = self.access_mode.currentIndex() == 1
         if self.provider.currentData() == "internxt":
             self.internxt_login(); return
+        if self.provider.currentData() in {"webdav", "protondrive"}:
+            self.credentials_login(self.provider.currentData()); return
         from threading import Event
         self.browser_url = None
         while not self.oauth_urls.empty(): self.oauth_urls.get_nowait()
@@ -689,7 +803,7 @@ class Window(QMainWindow):
         form = QFormLayout(dialog)
         from pathlib import Path
         encrypted = self.manager.accounts.encrypted(registration[1])
-        prefix = 'onedrive_' if registration[0].startswith('onedrive_') else 'google_'
+        prefix = next((p for p in ('onedrive_', 'dropbox_') if registration[0].startswith(p)), 'google_')
         default = registration[0] if encrypted else prefix + registration[0][-6:]
         name = QLineEdit(default); name.setReadOnly(encrypted); form.addRow(self.t['name'], name)
         path = QLineEdit(str(self.manager.home / 'Drives' / default)); browse = QPushButton(self.t['choose'])
@@ -774,6 +888,8 @@ class Window(QMainWindow):
         if self.pending_registration is not None:
             self.pending_registration[1].unlink(missing_ok=True)
             self.pending_registration = None
+        self.connection_cancel.set()
+        self.connection_pool.shutdown(wait=False, cancel_futures=True)
         self.update_pool.shutdown(wait=False, cancel_futures=True)
         self.quota_pool.shutdown(wait=False, cancel_futures=True)
         self.pool.shutdown(wait=False, cancel_futures=True)

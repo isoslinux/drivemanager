@@ -2,12 +2,12 @@
 
 ## Install the RPM
 
-Download `drive-manager-1.15.0-1.fc44.noarch.rpm` from
+Download `drive-manager-1.18.0-1.fc44.noarch.rpm` from
 [the latest release](https://github.com/isoslinux/drivemanager/releases/latest).
 Open it with Discover or install/update it from the download folder:
 
 ```bash
-sudo dnf install ./drive-manager-1.15.0-1.fc44.noarch.rpm
+sudo dnf install ./drive-manager-1.18.0-1.fc44.noarch.rpm
 ```
 
 Launch **Drive Manager** from the KDE menu as your normal user, in a graphical
@@ -28,7 +28,7 @@ sudo dnf install python3 python3-pyside6 rclone fuse3 systemd dolphin psmisc kf6
 PYTHONPATH=src python3 -m drive_manager.app
 ```
 
-Rclone 1.73 or later is required. Internxt uses the KDE wallet named `kdewallet`;
+Rclone 1.73 or later is required. Internxt, Nextcloud and Proton Drive use the KDE wallet named `kdewallet`;
 account access also depends on the provider's plan and authentication requirements.
 Do not run the application with sudo.
 

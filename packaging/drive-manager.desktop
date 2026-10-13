@@ -1,10 +1,10 @@
 [Desktop Entry]
 Type=Application
 Name=Drive Manager
-Comment=Manage Google Drive, Internxt and OneDrive mounts
-Comment[es]=Gestionar montajes de Google Drive, Internxt y OneDrive
-Comment[fr]=Gérer les montages Google Drive, Internxt et OneDrive
-Comment[de]=Google-Drive-, Internxt- und OneDrive-Laufwerke verwalten
+Comment=Manage cloud drive mounts
+Comment[es]=Gestionar unidades en la nube
+Comment[fr]=Gérer les lecteurs cloud
+Comment[de]=Cloud-Laufwerke verwalten
 Exec=drive-manager
 Icon=drive-harddisk
 Terminal=false

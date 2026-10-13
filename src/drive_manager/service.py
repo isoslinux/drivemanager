@@ -34,13 +34,33 @@ class Manager:
     def provider_of(self, remote):
         private=self.accounts.path(remote)
         if private.is_file():
-            if self.accounts.encrypted(private): return 'internxt'
+            if self.accounts.encrypted(private):
+                return self.encrypted_provider(remote)
             import configparser
             parser=configparser.ConfigParser(interpolation=None);parser.read(private)
             return parser.get(remote,'type',fallback='')
         import json
         entries=json.loads(self.runner.run(['rclone','listremotes','--json']))
         return next((item.get('type','') for item in entries if item.get('name','').removesuffix(':')==remote),'')
+
+    def encrypted_provider(self, remote):
+        import json
+        from .providers import ENCRYPTED_TYPES
+        try:
+            metadata=json.loads(self.accounts.metadata_path(remote).read_text())
+            if metadata.get('name') != remote or metadata.get('type') not in ENCRYPTED_TYPES:
+                raise ValueError()
+            return metadata['type']
+        except Exception:
+            raise OperationError('Invalid encrypted account metadata') from None
+
+    def begin_credentials(self, remote, provider, user, password, cancel, **options):
+        from .credentials import authorize
+        with self.lock():
+            self.accounts.validate_name(remote)
+            if remote in self.discover_accounts() or self.settings.path(remote).exists():
+                raise OperationError('Connection name already exists')
+            return authorize(self.accounts, remote, provider, user, password, cancel, **options)
 
     def discover_accounts(self):
         existing = discover(self.runner)
@@ -57,15 +77,53 @@ class Manager:
                 raise OperationError("Connection name already exists")
             return authorize(self.accounts, remote, email, password, cancel, ask_code)
 
+    def renew_credentials(self, remote, user, password, cancel, *, confirmed=False, ask_code=None, **options):
+        """Stage a fresh login to the same encrypted account; preserve state on failure."""
+        if not confirmed: raise OperationError('credential_confirm')
+        if cancel.is_set(): raise OperationError('credential_renew_error')
+        with self.lock():
+            if not self.is_app_account(remote): raise OperationError('credential_renew_error')
+            path=self.accounts.path(remote)
+            if path.is_symlink() or not self.accounts.encrypted(path): raise OperationError('credential_renew_error')
+            provider=self.encrypted_provider(remote)
+            self.discover_accounts()
+            if self.status(remote).state not in {'unmounted','failed'}: raise OperationError('credential_renew_error')
+            self.ensure_no_dirty_cache(remote)
+            original=path.read_bytes(); staged=None
+            try:
+                if provider=='internxt':
+                    from .internxt import authorize
+                    registration=authorize(self.accounts,remote,user,password,cancel,ask_code or (lambda event:''),existing=path)
+                else:
+                    from .credentials import authorize
+                    registration=authorize(self.accounts,remote,provider,user,password,cancel,existing=path,**options)
+                name,staged=registration
+                if (name!=remote or registration.provider!=provider or staged.parent!=self.accounts.folder
+                    or not staged.name.startswith('.oauth-') or staged.is_symlink() or not self.accounts.encrypted(staged)):
+                    raise OperationError('credential_renew_error')
+                if cancel.is_set() or path.read_bytes()!=original: raise OperationError('credential_renew_error')
+                if self.status(remote).state not in {'unmounted','failed'}: raise OperationError('credential_renew_error')
+                self.ensure_no_dirty_cache(remote)
+                if self.encrypted_provider(remote)!=provider: raise OperationError('credential_renew_error')
+                names=self.discover_accounts()
+                staged.chmod(0o600)
+                with staged.open('rb') as data:os.fsync(data.fileno())
+                os.replace(staged,path)
+            finally:
+                if staged is not None: staged.unlink(missing_ok=True)
+            return names
+
     def begin_authorization(self, cancel, on_url, provider="drive", ask_drive=None, writable=False):
         from uuid import uuid4
         with self.lock():
-            if provider not in {'drive','onedrive'}: raise OperationError("Unsupported provider")
-            remote = ('google_' if provider == 'drive' else 'onedrive_') + uuid4().hex
+            if provider not in {'drive','onedrive','dropbox'}: raise OperationError("Unsupported provider")
+            remote = ('google_' if provider == 'drive' else provider+'_') + uuid4().hex
             if provider == 'onedrive':
                 from .onedrive import authorize
                 staged = (authorize(self.accounts, remote, cancel, on_url, ask_drive, True) if writable
                           else authorize(self.accounts, remote, cancel, on_url, ask_drive))
+            elif provider == 'dropbox':
+                staged = self.accounts.authorize(remote, cancel, on_url, writable, provider='dropbox')
             else:
                 staged = (self.accounts.authorize(remote, cancel, on_url, True) if writable
                           else self.accounts.authorize(remote, cancel, on_url))
@@ -77,7 +135,7 @@ class Manager:
     def reauthorize(self, remote, cancel, on_url, ask_drive=None, confirmed=False, request_write=False):
         """Replace only OAuth credentials after explicit same-account confirmation.
 
-        External configurations and Internxt credentials are outside this workflow.
+        External configurations and encrypted credentials are outside this workflow.
         Failed/cancelled authorization leaves the original configuration untouched.
         """
         if not confirmed:
@@ -96,7 +154,7 @@ class Manager:
             old = configparser.ConfigParser(interpolation=None)
             old.read_string(original.decode('utf-8'))
             provider = old.get(remote, 'type', fallback='')
-            if provider not in {'drive', 'onedrive'}:
+            if provider not in {'drive', 'onedrive', 'dropbox'}:
                 raise OperationError('reauth_error')
             # Custom OAuth clients need their own authorization flow.
             if any(old.get(remote, key, fallback='') for key in ('client_id', 'client_secret', 'service_account_file')):
@@ -105,6 +163,8 @@ class Manager:
             if provider == 'drive':
                 writable = writable or old.get(remote, 'scope', fallback='drive') in {'drive', 'drive.file'}
                 staged = self.accounts.authorize(remote, cancel, on_url, writable)
+            elif provider == 'dropbox':
+                staged = self.accounts.authorize(remote, cancel, on_url, writable, provider='dropbox')
             else:
                 from .onedrive import authorize
                 writable = writable or 'ReadWrite' in old.get(remote, 'access_scopes', fallback='Files.ReadWrite')
@@ -122,7 +182,8 @@ class Manager:
                 if request_write:
                     self.ensure_write_permission(remote, staged)
                 # Keep root-folder, backend options, and every application preference.
-                for key in ('token', 'scope' if provider == 'drive' else 'access_scopes'):
+                keys = ('token',) if provider == 'dropbox' else ('token', 'scope' if provider == 'drive' else 'access_scopes')
+                for key in keys:
                     if new.has_option(remote, key):
                         old.set(remote, key, new.get(remote, key))
                 with staged.open('w') as file:
@@ -159,6 +220,11 @@ class Manager:
                           else self.accounts.authorize(remote, cancel))
             else:
                 original, staged = registration
+                if staged.is_symlink(): raise OperationError('Invalid staged authorization')
+                from .providers import ENCRYPTED_TYPES
+                encrypted_provider = getattr(registration, 'provider', 'internxt')
+                if self.accounts.encrypted(staged) and encrypted_provider not in ENCRYPTED_TYPES:
+                    raise OperationError('Invalid encrypted provider')
                 if staged.parent != self.accounts.folder or not staged.name.startswith('.oauth-'):
                     raise OperationError("Invalid staged authorization")
                 if self.accounts.encrypted(staged):
@@ -180,7 +246,7 @@ class Manager:
                     import json
                     metadata=self.accounts.metadata_path(remote)
                     fd=os.open(metadata,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
-                    with os.fdopen(fd,'w') as file: json.dump({'name':remote,'type':'internxt'},file)
+                    with os.fdopen(fd,'w') as file: json.dump({'name':remote,'type':encrypted_provider},file)
                 os.replace(staged, self.accounts.path(remote))
             except Exception:
                 staged.unlink(missing_ok=True)
@@ -280,11 +346,11 @@ class Manager:
             raise transfers.TransferError('uploads_pending')
 
     def ensure_write_permission(self, remote, config):
-        if self.accounts.encrypted(config): return  # Internxt is already authenticated with full access.
+        if self.accounts.encrypted(config): return  # Credential backends use mount flags to enforce the selected mode.
         import configparser
         parser=configparser.ConfigParser(interpolation=None);parser.read(config)
         kind=parser.get(remote,'type',fallback='')
-        if kind not in {'drive','onedrive','internxt'}: raise OperationError('needs_write_auth')
+        if kind not in {'drive','onedrive','internxt','dropbox','webdav','protondrive'}: raise OperationError('needs_write_auth')
         scope=parser.get(remote,'scope',fallback='drive')
         access=parser.get(remote,'access_scopes',fallback='Files.ReadWrite')
         if ((kind=='drive' and scope not in {'drive','drive.file'})
@@ -369,7 +435,15 @@ class Manager:
             config = self.snapshot_config(remote)
             if prefs.writable: self.ensure_write_permission(remote, config)
             else: self.ensure_no_dirty_cache(remote)
+            import configparser
+            if self.accounts.encrypted(config):
+                backend = self.encrypted_provider(remote)
+            else:
+                parser=configparser.ConfigParser(interpolation=None); parser.read(config)
+                backend=parser.get(remote,'type',fallback='')
             extra=[]
+            if backend == 'dropbox': extra.append('--dropbox-batch-mode=sync')
+            if backend == 'protondrive': extra.append('--protondrive-enable-caching=false')
             endpoint=self.rc_endpoint(remote)
             if any(parent.is_symlink() for parent in [endpoint,*endpoint.parents]): raise OperationError('uploads_unknown')
             endpoint.parent.mkdir(parents=True,exist_ok=True,mode=0o700);os.chmod(endpoint.parent,0o700)
@@ -384,6 +458,7 @@ class Manager:
                 "--property=StandardOutput=null", "--property=StandardError=null",
                 "--property=UMask=0077", "--property=TimeoutStopSec="+("infinity" if prefs.writable else "30"), "--property=Restart=no",
                 "--", rclone, "mount", remote + ":", str(target),
+                "--devname=" + remote + ":",
                 *([] if prefs.writable else ["--read-only"]), "--vfs-cache-mode=full", "--log-level=ERROR",
                 "--cache-dir=" + str(cache), f"--vfs-cache-max-size={prefs.cache_gib}G",
                 f"--vfs-cache-max-age={prefs.cache_hours}h", "--vfs-cache-min-free-space=512M",
