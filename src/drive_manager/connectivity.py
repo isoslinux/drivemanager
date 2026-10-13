@@ -95,3 +95,27 @@ def check(manager, remote, cancel=None):
             return probe(args,cancel)
     except Exception:
         return Result('connection_error')
+
+from contextlib import contextmanager
+from .process import OperationError
+
+@contextmanager
+def private_snapshot(manager,remote):
+    """Reusable isolated config for explicit readback of a disposable test file."""
+    manager.identity(remote);own=manager.is_app_account(remote);source=manager.accounts.path(remote)
+    if not own:
+        lines=manager.runner.run(['rclone','config','file']).strip().splitlines()
+        if not lines:raise OperationError('connection_error')
+        source=Path(lines[-1])
+    if not source.is_absolute() or source.is_symlink() or not source.is_file():raise OperationError('connection_error')
+    encrypted=manager.accounts.encrypted(source)
+    if encrypted and not own:raise OperationError('connection_locked')
+    folder=manager.home/'.local/state/drive-manager/connectivity'
+    if any(p.is_symlink() for p in [folder,*folder.parents]):raise OperationError('connection_error')
+    folder.mkdir(parents=True,exist_ok=True,mode=0o700);folder.chmod(0o700)
+    with tempfile.TemporaryDirectory(dir=folder,prefix='.check-') as temporary:
+        config=Path(temporary)/'rclone.conf'
+        with config.open('xb') as copy:
+            os.fchmod(copy.fileno(),0o600)
+            with source.open('rb') as original:shutil.copyfileobj(original,copy)
+        yield config,encrypted

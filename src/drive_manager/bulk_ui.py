@@ -34,24 +34,170 @@ class BulkActions:
         self.request_health()
 
     def show_health(self):
-      …18569 tokens truncated…ie Dateien anzuzeigen.',
- 'update_open_rpm': 'RPM herunterladen',
- 'update_open_release': 'Release-Seite öffnen',
- 'update_open_error': 'Der Standardbrowser konnte nicht geöffnet werden.',
- 'update_manual': 'Die Installation erfolgt manuell. Diese Prüfung lädt keine Software herunter '
-                  'und führt sie nicht aus, ändert keine Zugangsdaten und unterbricht keine '
-                  'Laufwerke oder Uploads.'})
+        result=self.health_results.get(self.accounts.currentText())
+        if result is None:self.health_label.clear();return
+        text=self.t['cache_health'].format(free=size(result.free),pending='—' if result.pending is None else result.pending)
+        if result.low:text+=' · '+self.t['cache_low']
+        if result.pending is None:text+=' · '+self.t['cache_unknown']
+        self.health_label.setText(text)
 
-MESSAGES.update({'username': 'Benutzername', 'webdav_url': 'WebDAV-URL (HTTPS)', 'app_password': 'App-Passwort', 'optional_2fa': 'Zwei-Faktor-Code (optional)', 'mailbox_password': 'Postfachpasswort (optional)', 'nextcloud_note': 'Kopieren Sie die WebDAV-Adresse aus den Nextcloud-Dateieinstellungen. Erstellen Sie ein App-Passwort in den Nextcloud-Sicherheitseinstellungen.', 'proton_note': 'Experimentelle Rclone-Unterstützung. Melden Sie sich zuerst mindestens einmal im Web bei Proton Drive an. Geben Sie bei Bedarf einen aktuellen Zwei-Faktor-Code ein. Das Postfachpasswort wird nur für Konten mit zwei Passwörtern benötigt.', 'credentials_wait': 'Zugangsdaten werden sicher geprüft…', 'credentials_error': 'Anmeldung fehlgeschlagen. Prüfen Sie Zugangsdaten, Zwei-Faktor-Code, Serververfügbarkeit und Rclone-Kompatibilität.', 'webdav_url_error': 'Geben Sie eine gültige HTTPS-WebDAV-URL ohne Zugangsdaten, Abfrage oder Fragment ein.'})
+    def setup_guide(self):
+        if getattr(self,'setup_dialog',None) is not None and self.setup_dialog.isVisible():
+            self.setup_dialog.show();return
+        from .diagnostics import collect,format_report
+        from .portable import finish_setup
+        dialog=QDialog(self);dialog.setWindowTitle(self.t['setup_guide']);dialog.resize(650,420)
+        layout=QVBoxLayout(dialog)
+        note=QLabel(self.t['setup_steps']);self.setup_note=note;note.setWordWrap(True);layout.addWidget(note)
+        report=QPlainTextEdit();report.setReadOnly(True);layout.addWidget(report)
+        actions=QHBoxLayout();check=QPushButton(self.t['diagnostics']);actions.addWidget(check)
+        provider=QComboBox()
+        for p in PROVIDERS:provider.addItem(p.label,p.key)
+        layout.addWidget(provider)
+        def dependencies():
+            check.setEnabled(False)
+            def shown(result):report.setPlainText(format_report(result,self.language));check.setEnabled(True)
+            self.submit(lambda:collect(self.manager),shown)
+        check.clicked.connect(dependencies)
+        create=QPushButton(self.t['add']);actions.addWidget(create)
+        def begin():
+            self.provider.setCurrentIndex(self.provider.findData(provider.currentData()))
+            self.access_mode.setCurrentIndex(0);dialog.accept();self.add_account()
+        create.clicked.connect(begin)
+        finish=QPushButton(self.t['setup_finish']);actions.addWidget(finish)
+        def complete():
+            try:finish_setup(self.manager)
+            except Exception:report.setPlainText(self.t['portable_error']);return
+            self.setup_banner.hide();dialog.accept()
+        finish.clicked.connect(complete);layout.addLayout(actions);dialog.show()
+        self.setup_actions={"diagnostics":check,"add":create,"setup_finish":finish}
+        self.setup_dialog=dialog
 
-MESSAGES.update({'check_connection': 'Verbindung prüfen', 'connection_checking': 'Lesezugriff auf den Stammordner wird geprüft…', 'connection_ok': 'Stammordner lesbar. Schreibzugriff und Abschluss der Uploads wurden nicht geprüft.', 'connection_auth': 'Anmeldung fehlgeschlagen. Erneuern Sie die Autorisierung oder prüfen Sie Ihre Zugangsdaten.', 'connection_permission': 'Lesezugriff verweigert. Prüfen Sie die Kontoberechtigungen auf dem Server.', 'connection_network': 'Netzwerkanfrage fehlgeschlagen. Prüfen Sie Verbindung und Serververfügbarkeit.', 'connection_rate': 'Anfragelimit erreicht. Warten Sie vor einer erneuten Prüfung.', 'connection_timeout': 'Zeitlimit überschritten. Der Anbieter kann langsam sein; dies beweist keine Unterbrechung.', 'connection_error': 'Zugriff konnte nicht geprüft werden. Prüfen Sie Kompatibilität und Kontoeinstellungen.', 'connection_wallet': 'Private Konfiguration konnte nicht entsperrt werden. Prüfen Sie KDE Wallet.', 'connection_locked': 'Externe verschlüsselte Konfigurationen benötigen ihre ursprüngliche Anmeldung.', 'connection_cancelled': 'Prüfung abgebrochen.', 'connection_elapsed': '{seconds:.1f} s'})
+    def export_settings(self):
+        from .portable import export
+        path,_=QFileDialog.getSaveFileName(self,self.t['export_settings'],str(self.manager.home/'drive-manager-settings.json'),'JSON (*.json)')
+        if path:self.submit(lambda:export(self.manager,path),lambda count:self.label.setText(self.t['export_done'].format(count=count)),'portable_error')
 
-MESSAGES['connection_last']='Letzte Prüfung'
+    def import_settings(self):
+        from .portable import plan
+        path,_=QFileDialog.getOpenFileName(self,self.t['import_settings'],str(self.manager.home),'JSON (*.json)')
+        if path:self.submit(lambda:plan(self.manager,path),lambda rows:self.preview_import(path,rows),'portable_error')
 
-MESSAGES.update({'renew_credentials': 'Zugangsdaten erneuern', 'credential_confirm': 'Verwenden Sie DASSELBE Konto und denselben Server. Die Verbindung muss getrennt sein und darf keine ausstehenden Uploads haben. Ordner, Einstellungen und Cache bleiben erhalten. Zugangsdaten ersetzen?', 'credential_identity': 'Benutzername oder Nextcloud-Server weicht von der ursprünglichen Verbindung ab. Die bisherigen Zugangsdaten bleiben erhalten.', 'credential_custom': 'Konfigurationen mit eigenem Bearer-Token oder OTP-Geheimnis benötigen ihre ursprüngliche Einrichtung. Die bisherigen Zugangsdaten bleiben erhalten.', 'credential_renew_error': 'Zugangsdaten konnten nicht erneuert werden. Verwenden Sie eine verschlüsselte Verbindung dieser Anwendung, getrennt und ohne ausstehende Uploads. Die bisherigen Zugangsdaten bleiben erhalten.'})
+    def preview_import(self,path,rows):
+        from .portable import apply
+        dialog=QDialog(self);dialog.setWindowTitle(self.t['import_settings']);dialog.resize(700,400)
+        layout=QVBoxLayout(dialog);note=QLabel(self.t['import_note']);note.setWordWrap(True);layout.addWidget(note)
+        text=QPlainTextEdit();text.setReadOnly(True)
+        text.setPlainText('\n\n'.join(name+' · '+next(p.label for p in PROVIDERS if p.key==provider)+'\n'+(prefs.mount_path or str(self.manager.home/'DriveManager'/self.manager.settings.path(name).stem))+'\n'+
+            self.t['mode_rw' if prefs.writable else 'mode_ro']+' · '+self.t['automount']+': '+('✓' if prefs.automount else '—')+'\n'+
+            self.t['upload_limit']+': '+str(prefs.upload_kib)+' KiB/s · '+self.t['download_limit']+': '+(str(prefs.download_kib)+' KiB/s' if prefs.download_kib else self.t['unlimited'])
+            for name,provider,prefs in rows));layout.addWidget(text)
+        buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Save|QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept);buttons.rejected.connect(dialog.reject);layout.addWidget(buttons)
+        self.timer.stop()
+        try:accepted=dialog.exec()==QDialog.DialogCode.Accepted
+        finally:self.timer.start(250)
+        if accepted:self.submit(lambda:apply(self.manager,path,confirmed=True,reviewed=rows),self.set_accounts,'portable_error')
 
-MESSAGES.update({'tools': 'Werkzeuge', 'setup_guide': 'Einrichtungsassistent', 'export_settings': 'Einstellungen exportieren', 'import_settings': 'Einstellungen importieren', 'setup_steps': '1. Prüfen Sie lokale Abhängigkeiten. Der Assistent installiert keine Programme.\n2. Wählen Sie einen Anbieter und richten Sie das Konto schreibgeschützt ein.\n3. Wählen Sie einen leeren Ordner, verbinden Sie ihn und öffnen Sie Dolphin. Aktivieren Sie Schreiben nur bei Bedarf.', 'setup_finish': 'Assistent abschließen', 'export_done': 'Einstellungen für {count} Konten exportiert. Keine Zugangsdaten oder Cache-Inhalte enthalten.', 'import_note': 'Prüfen Sie Ordner, Zugriff, Anmeldungsmontage und Geschwindigkeitslimits. Konten müssen hier bereits eingerichtet sein. Speichern gilt nur für getrennte Konten ohne ausstehende lokale Änderungen. Schreiben und automatisches Einbinden gelten bei der nächsten Verbindung/Anmeldung.', 'portable_error': 'Datei konnte nicht verarbeitet werden. Prüfen Sie Format, passende Konten/Anbieter, getrennte leere Ordner, Schreibberechtigung und Dateirechte. Keine Zugangsdaten werden importiert.', 'portable_busy': 'Trennen Sie betroffene Konten und beenden Sie ausstehende Uploads vor dem Import.', 'upload_limit': 'Uploadlimit', 'download_limit': 'Downloadlimit', 'unlimited': 'Unbegrenzt', 'cache_health': 'Lokaler Cache: freier Speicher {free} · Ausstehende lokale Dateien {pending}', 'cache_low': 'Wenig lokaler Speicher. Bewahren Sie ausstehende Dateien auf und schaffen Sie Platz außerhalb des Uploadcaches.', 'cache_unknown': 'Lokaler Cachezustand konnte nicht geprüft werden.', 'cloud_slow': 'Langsame Cloudantwort; Vorschau, Ordnerzählung und Geschwindigkeitslimits können verzögern.', 'validate_all': 'Konten validieren', 'validation_note': 'Leseprüfungen betreffen nur eingerichtete Konten. Anbieter ohne Ergebnis benötigen ein Konto. Schreiben und Neuverbinden brauchen getrennte Bestätigung. Lesen bestätigt weder Uploads noch 2FA, Erneuerung oder Wiederherstellung nach Ausfällen.', 'validation_read': 'Stammordner lesen', 'validation_time': 'Antwortzeit', 'validation_unchecked': 'Nicht geprüft / kein Ergebnis', 'validation_write': 'Schreiben testen', 'validation_reconnect': 'Neuverbinden testen', 'validation_guide': 'Validierungsanleitung', 'validation_confirm': 'Ausdrückliche Testbestätigung erforderlich.', 'validation_write_confirm': 'Eine kleine Testdatei erstellen und direkt aus der Cloud zurücklesen? Die Datei bleibt zum Prüfen oder manuellen Löschen erhalten. Das Konto muss von dieser Anwendung mit Schreibzugriff eingebunden sein und darf keine ausstehenden Uploads haben.', 'validation_reconnect_confirm': 'Dieses ausgewählte Konto trennen und neu verbinden? Ausstehende Uploads oder offene Dateien verhindern dies. Andere Konten werden nicht neu gestartet.', 'validation_write_requires': 'Binden Sie dieses Konto mit Schreibzugriff ein und beenden Sie ausstehende Uploads.', 'validation_write_ok': 'Testinhalt direkt aus der Cloud geprüft. Die Testdatei bleibt erhalten.', 'validation_timeout': 'Test nicht rechtzeitig abgeschlossen. Bewahren Sie Testdatei und ausstehenden Cache auf; prüfen Sie Übertragungen.', 'validation_error': 'Test konnte nicht geprüft werden. Prüfen Sie Zugriff, Uploads und lokale Diagnose. Bewahren Sie ausstehende Daten auf.', 'validation_finished': 'Leseprüfungen beendet. Prüfen Sie jedes Konto; fehlende oder abgebrochene Konten bleiben ungeprüft.', 'validation_file': 'Testdatei', 'validation_reconnect_ok': 'Verwalteter Mount neu verbunden. Dateiintegrität und Ausfallwiederherstellung sind separate Prüfungen.', 'acceptance_steps': 'Für jeden Anbieter:\n1. Richten Sie ein Testkonto ein und prüfen Sie den Stammordner.\n2. Binden Sie schreibgeschützt ein und prüfen Sie die Schreibsperre.\n3. Aktivieren Sie Schreiben ausdrücklich und testen Sie es; prüfen Sie die behaltene Datei auf der Webseite.\n4. Schließen Sie Dateien, testen Sie Neuverbinden und lesen Sie die Datei erneut.\n5. Prüfen Sie 2FA und Zugangsdaten-Erneuerung manuell mit demselben Konto.\n6. Testen Sie Ausfälle mit entbehrlichen Daten; prüfen Sie Uploadschutz und Wiederaufnahme.\n7. Vergleichen Sie das Kontingent mit dem Anbieter.\nDiese Betreiberprüfungen werden nicht automatisch als bestanden markiert.'})
+    def validation_panel(self):
+        if self.validation_dialog is not None:self.validation_dialog.show();return
+        dialog=QDialog(self);dialog.setWindowTitle(self.t['validate_all']);dialog.resize(850,500)
+        layout=QVBoxLayout(dialog);note=QLabel(self.t['validation_note']);self.validation_note=note;note.setWordWrap(True);layout.addWidget(note)
+        self.validation_table=QTableWidget(0,4);self.validation_table.setHorizontalHeaderLabels([self.t['provider_column'],self.t['account'],self.t['validation_read'],self.t['validation_time']])
+        self.validation_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers);layout.addWidget(self.validation_table)
+        self.validation_message=QLabel();self.validation_message.setWordWrap(True);layout.addWidget(self.validation_message)
+        self.validation_selector=QComboBox();self.validation_selector.addItems([self.accounts.item(row,0).text() for row in range(self.accounts.rowCount())]);layout.addWidget(self.validation_selector)
+        controls=QHBoxLayout();self.validation_controls=[];self.validation_buttons={}
+        for key,kind in [('validate_all','read'),('validation_write','write'),('validation_reconnect','reconnect')]:
+            button=QPushButton(self.t[key]);button.clicked.connect(lambda checked=False,kind=kind:self.start_validation(kind));controls.addWidget(button);self.validation_controls.append(button);self.validation_buttons[key]=button
+        cancel=QPushButton(self.t['cancel_oauth']);self.validation_buttons['cancel_oauth']=cancel;cancel.clicked.connect(lambda:self.validation_cancel.set());controls.addWidget(cancel);layout.addLayout(controls)
+        guide=QPushButton(self.t['validation_guide']);self.validation_buttons['validation_guide']=guide;guide.clicked.connect(self.acceptance_guide);layout.addWidget(guide)
+        self.validation_rows=getattr(self,'validation_rows',{})
+        self.validation_dialog=dialog;self.render_validation()
+        def closed():self.validation_cancel.set();self.validation_dialog=None
+        dialog.finished.connect(closed);dialog.show()
 
-MESSAGES.update({'browse_measure': 'Navigation messen', 'browse_result': 'Ordnerliste: {listing} · Speicherabfrage: {space}', 'browse_note': 'Leseprüfungen mit je 10 Sekunden Zeitlimit. — bedeutet nicht verfügbar oder Zeitüberschreitung. Vorschau und Inhaltszählung werden nicht gemessen. Bei schneller Liste und langsamem Dolphin vergleichen Sie ohne Vorschau und Ordnergrößenberechnung.'})
+    def render_validation(self):
+        if self.validation_dialog is None:return
+        names={self.accounts.item(row,0).text() for row in range(self.accounts.rowCount())}
+        records=[]
+        for provider in PROVIDERS:
+            rows=[(name,result) for name,(key,result) in self.validation_rows.items() if key==provider.key and name in names]
+            if rows:
+                for name,result in rows:records.append([provider.label,name,self.t[result.state]+(' · '+self.t['cloud_slow'] if slow(result) else ''),f'{result.seconds:.1f} s'])
+            else:records.append([provider.label,'—',self.t['validation_unchecked'],'—'])
+        self.validation_table.setRowCount(len(records))
+        for row,values in enumerate(records):
+            for col,value in enumerate(values):self.validation_table.setItem(row,col,QTableWidgetItem(value))
+        self.validation_table.resizeColumnsToContents()
+        self.validation_table.horizontalHeader().setSectionResizeMode(2,QHeaderView.ResizeMode.Stretch)
+        self.validation_table.resizeRowsToContents()
+        for button in self.validation_controls:button.setEnabled(self.validation_future is None)
 
-DIAGNOSTICS.update({'wallet': 'KWallet (verschlüsselte Konten)', 'missing_wallet': 'Installieren Sie kf6-kwallet für Internxt, Nextcloud und Proton Drive.'})
+    def start_validation(self,kind):
+        if self.validation_future is not None:return
+        from .validation import read_all,write_test,reconnect
+        remote=self.validation_selector.currentText()
+        if kind!='read':
+            if not remote:return
+            message=self.t['validation_write_confirm' if kind=='write' else 'validation_reconnect_confirm']+'\n'+remote
+            if QMessageBox.question(self,self.t['validate_all'],message,QMessageBox.StandardButton.Yes|QMessageBox.StandardButton.No,QMessageBox.StandardButton.No)!=QMessageBox.StandardButton.Yes:return
+        self.validation_cancel=Event();self.validation_kind=kind;self.validation_remote=remote
+        if kind=='read':self.validation_future=self.validation_pool.submit(read_all,self.manager,self.validation_cancel,self.validation_queue.put)
+        elif kind=='write':self.validation_future=self.validation_pool.submit(write_test,self.manager,remote,self.validation_cancel,True)
+        else:self.validation_future=self.validation_pool.submit(reconnect,self.manager,remote,True,self.validation_cancel)
+        self.validation_message.setText(self.t['connection_checking']);self.render_validation()
+
+    def tick_validation(self):
+        try:
+            while True:
+                name,provider,result=self.validation_queue.get_nowait()
+                self.validation_rows[name]=(provider,result);self.connection_results[name]=result
+                self.render_validation();self.show_connection_result()
+        except Empty:pass
+        if self.validation_future is None or not self.validation_future.done():return
+        future,self.validation_future=self.validation_future,None
+        try:
+            result=future.result()
+            if self.validation_dialog is not None:
+                if self.validation_kind=='read':message=self.t['validation_finished']
+                elif self.validation_kind=='write':message=self.t[result.state]+('\n'+self.t['validation_file']+': '+result.file if result.file else '')
+                else:message=self.t['validation_reconnect_ok' if result.state=='mounted' and result.managed else 'validation_error']
+                self.validation_message.setText(message)
+        except Exception:
+            if self.validation_dialog is not None:self.validation_message.setText(self.t['validation_error'])
+        self.render_validation()
+
+    def acceptance_guide(self):
+        dialog=QDialog(self);dialog.setWindowTitle(self.t['validation_guide']);dialog.resize(700,400)
+        layout=QVBoxLayout(dialog);text=QPlainTextEdit();text.setReadOnly(True);text.setPlainText(self.t['acceptance_steps']);layout.addWidget(text)
+        close=QPushButton(self.t['updates_close']);close.clicked.connect(dialog.accept);layout.addWidget(close);dialog.show()
+        self.acceptance_dialog=dialog
+
+    def retranslate_bulk_dialogs(self):
+        if getattr(self,'setup_dialog',None) is not None:
+            self.setup_dialog.setWindowTitle(self.t['setup_guide']);self.setup_note.setText(self.t['setup_steps'])
+            for key,button in self.setup_actions.items():button.setText(self.t[key])
+        if self.validation_dialog is not None:
+            self.validation_dialog.setWindowTitle(self.t['validate_all']);self.validation_note.setText(self.t['validation_note'])
+            self.validation_table.setHorizontalHeaderLabels([self.t['provider_column'],self.t['account'],self.t['validation_read'],self.t['validation_time']])
+            for key,button in self.validation_buttons.items():button.setText(self.t[key])
+            self.render_validation()
+
+    def browse_measure(self):
+        from .performance import browse
+        remote=self.accounts.currentText()
+        if not remote or self.browse_future is not None:return
+        self.browse_remote=remote;self.tools_actions['browse_measure'].setEnabled(False)
+        self.browse_future=self.health_pool.submit(browse,self.manager,remote)
+
+    def tick_browse(self):
+        if self.browse_future is None or not self.browse_future.done():return
+        future,self.browse_future=self.browse_future,None
+        self.tools_actions['browse_measure'].setEnabled(True)
+        try:result=future.result()
+        except Exception:result=None
+        if self.browse_remote!=self.accounts.currentText():return
+        value=lambda seconds:'—' if seconds is None else f'{seconds:.1f} s'
+        text=self.t['browse_result'].format(listing=value(result.listing) if result else '—',space=value(result.space) if result else '—')
+        QMessageBox.information(self,self.t['browse_measure'],text+'\n\n'+self.t['browse_note'])
