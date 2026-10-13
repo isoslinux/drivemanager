@@ -29,6 +29,7 @@ of normal automated tests.
 | Diagnostics | Missing tools, timeouts, unexpected output, privacy and clipboard contents |
 | Notifications | Deduplication, recovery, multiple accounts, silence and preference rollback |
 | Quotas | Shared storage, missing/invalid values, isolated refresh, cleanup and stale selections |
+| Bundle | Independent speed limits, legacy defaults, private portable files, schema/path rejection, reviewed import changes, rollback, cache health, bounded browsing and confirmed live-test guards |
 | Connectivity | Read-only root access, isolated token refresh, private permissions, cancellation/timeout, bounded diagnostic output, external encrypted configurations and stale selections |
 | Updates | Numeric stable versions, safe URLs, response bounds, rate limits, manual browser actions and unchanged account controls |
 | Languages | Complete keys/placeholders, private persistence, fallback, standard buttons and live switching |
@@ -70,3 +71,9 @@ provider. Confirm wrong passwords and changed usernames preserve the old account
 2FA and mailbox passwords work, cached tokens do not mask failed login, and
 mount folder/settings/cache remain unchanged. Check cancelled dialogs and wallet
 failures. Do not change credentials for an important account merely for a test.
+
+Run the six-provider acceptance plan in **Tools → Validate accounts**. Automatic
+root reads cover configured accounts only. Test writing and reconnect require
+explicit account-specific confirmation. Inspect the retained disposable file in
+the cloud web interface. The acceptance guide covers 2FA, renewal, outage recovery
+and quota comparison; missing scenarios must remain unverified. See [BUNDLE.md](BUNDLE.md).

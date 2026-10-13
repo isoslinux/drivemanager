@@ -5,6 +5,9 @@
 ```mermaid
 flowchart TD
     UI[PySide6 window and tray] --> Operations[Serial operation worker]
+    UI --> Health[Cache and browsing worker]
+    UI --> Validation[Explicit acceptance worker]
+    UI --> Portable[Reviewed preference import/export]
     UI --> Quota[Separate quota worker]
     UI --> Connectivity[Manual connection worker]
     Connectivity --> Snapshot[Temporary private configuration]
@@ -25,6 +28,10 @@ flowchart TD
 
 | Module | Responsibility |
 | --- | --- |
+| `bulk_ui.py` | Setup, reviewed portability, live acceptance and asynchronous local-health controllers |
+| `performance.py` | Read-only cache metadata, disk-space warnings and bounded browsing measurements |
+| `portable.py` | Strict credential-free preference format, reviewed imports and rollback |
+| `validation.py` | Explicit live read/write/reconnect checks and disposable-file readback |
 | `app.py` | Qt widgets, selection, explicit confirmations, workers and tray integration |
 | `account_list.py` | Native account/transfer tables with stable selection helpers |
 | `service.py` | Account identity, ownership checks, operation lock, private snapshots and mount policy |
@@ -128,3 +135,10 @@ login fields in the staged copy. Cached session tokens are removed, root reads
 validate fresh authentication, and the manager rechecks mount state, dirty cache,
 source bytes and metadata before atomic promotion. Preferences and cache files
 are never rewritten by renewal. See [credential renewal](CREDENTIALS.md).
+
+The six-area bundle adds independent validation and health workers. Directory
+measurements execute in bounded child processes; live readback uses private
+credential snapshots. User confirmation is required separately for test writes
+and reconnects. Import previews are checked again before preference transactions,
+and failed batches restore previous bytes. No feature silently restarts services
+or declares missing providers accepted. See [the bundle](BUNDLE.md).

@@ -1,5 +1,5 @@
 Name:           drive-manager
-Version:        1.18.0
+Version:        1.19.0
 Release:        1%{?dist}
 Summary:        Multi-account cloud drive desktop manager for KDE
 License:        MIT
@@ -47,6 +47,10 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src %{python3} -m unittest discover -s test
 %{_datadir}/applications/drive-manager.desktop
 
 %changelog
+* Wed Oct 14 2026 Drive Manager contributors - 1.19.0-1
+- Add the six-area validation, performance and portability bundle
+- Preserve source credentials, pending cache and explicit service confirmations
+
 * Wed Oct 14 2026 Drive Manager contributors - 1.18.0-1
 - Add transactional encrypted credential renewal with identity and upload guards
 - Preserve account preferences and require fresh root-read authentication

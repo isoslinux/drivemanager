@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "drive-manager"
-version = "1.18.0"
+version = "1.19.0"
 description = "Multi-account cloud drive desktop manager for KDE"
 requires-python = ">=3.11"
 dependencies = ["PySide6>=6.6"]

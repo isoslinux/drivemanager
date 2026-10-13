@@ -441,7 +441,8 @@ class Manager:
             else:
                 parser=configparser.ConfigParser(interpolation=None); parser.read(config)
                 backend=parser.get(remote,'type',fallback='')
-            extra=[]
+            rate=lambda value:str(value)+"k" if value else "off"
+            extra=["--bwlimit="+rate(prefs.upload_kib)+":"+rate(prefs.download_kib)]
             if backend == 'dropbox': extra.append('--dropbox-batch-mode=sync')
             if backend == 'protondrive': extra.append('--protondrive-enable-caching=false')
             endpoint=self.rc_endpoint(remote)

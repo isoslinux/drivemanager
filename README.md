@@ -13,7 +13,7 @@ Download the `noarch.rpm` from [GitHub Releases](https://github.com/isoslinux/dr
 and open it with Discover, or install/update it from your download folder:
 
 ```bash
-sudo dnf install ./drive-manager-1.18.0-1.fc44.noarch.rpm
+sudo dnf install ./drive-manager-1.19.0-1.fc44.noarch.rpm
 ```
 
 Launch **Drive Manager** from the KDE application menu, as your normal user.
@@ -31,6 +31,8 @@ files are never included in this repository or the release package.
   A manual check verifies root-folder read access without changing the original credentials.
 - Configure mount folder, cache targets, access mode and mounting at login per account.
 - Expand **Transfers** to inspect progress. Desktop notifications can be muted.
+- **Tools** contains the setup guide, live validation, browsing measurements and portable settings.
+- Per-account settings include independent upload/download limits; local cache space and pending files appear in the main window.
 - **Diagnostics** checks dependencies and local state with a copyable safe report.
 - Select an account to query its storage quota. **Refresh space** requests fresh data.
 - Select a language near the top of the window. Changes apply immediately and persist.
@@ -84,6 +86,7 @@ active managed mount for quota queries; background queries never unlock KWallet.
 - [Notifications](docs/NOTIFICATIONS.md)
 - [Storage quotas](docs/STORAGE.md)
 - [Languages and translation maintenance](translations/README.md)
+- [The six-area improvement bundle](docs/BUNDLE.md)
 - [Encrypted credential renewal](docs/CREDENTIALS.md)
 - [Connection checks](docs/CONNECTIVITY.md)
 - [Update checks](docs/UPDATES.md)
@@ -101,6 +104,7 @@ in the account owner's desktop session. See the validation document for the scop
 
 | Version | Main change |
 | --- | --- |
+| 1.19.0 | Live validation, browsing diagnostics, speed limits, cache warnings, setup and portable preferences |
 | 1.18.0 | Renew encrypted credentials for the same Nextcloud, Proton and Internxt account |
 | 1.17.1 | Stable mount identities for backend option overrides |
 | 1.17.0 | Manual connection checks with safe errors and private snapshots |

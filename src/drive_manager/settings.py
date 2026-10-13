@@ -14,6 +14,8 @@ class Preferences:
     cache_hours: int = 24
     automount: bool = False
     writable: bool = False
+    upload_kib: int = 0
+    download_kib: int = 0
 
 class Settings:
     def __init__(self, home):
@@ -24,6 +26,8 @@ class Settings:
         return self.folder / (sha256(remote.encode()).hexdigest()[:24] + '.json')
 
     def validate(self, prefs):
+        if any(type(value) is not int or not 0<=value<=1048576 for value in (prefs.upload_kib,prefs.download_kib)):
+            raise OperationError("Invalid bandwidth limits")
         if (type(prefs.writable) is not bool or type(prefs.automount) is not bool or type(prefs.cache_gib) is not int or not 1 <= prefs.cache_gib <= 1024
             or type(prefs.cache_hours) is not int or not 1 <= prefs.cache_hours <= 8760
             or not isinstance(prefs.mount_path, str)):

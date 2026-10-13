@@ -1,11 +1,13 @@
 """Qt UI: operations run in a single worker; polling never stops a service."""
 import sys
+from threading import Event
+from .performance import slow
 from concurrent.futures import ThreadPoolExecutor
 from PySide6.QtCore import QTimer, QUrl, Qt
 from PySide6.QtGui import QIcon, QAction, QDesktopServices
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
     QLabel, QComboBox, QPushButton, QMessageBox, QSystemTrayIcon, QMenu, QDialog, QFormLayout, QLineEdit,
-    QSpinBox, QDialogButtonBox, QFileDialog, QHBoxLayout, QCheckBox, QInputDialog, QProgressBar, QPlainTextEdit, QToolButton)
+    QSpinBox, QDialogButtonBox, QFileDialog, QHBoxLayout, QCheckBox, QInputDialog, QProgressBar, QPlainTextEdit, QToolButton, QTableWidget, QTableWidgetItem, QAbstractItemView)
 from .process import Runner, OperationError
 from .remotes import discover
 from .service import Manager
@@ -18,7 +20,9 @@ from . import __version__
 
 from .i18n import TEXT, LANGUAGES, LanguageSettings, StandardTranslator, install_qt_language
 
-class Window(QMainWindow):
+from .bulk_ui import BulkActions
+
+class Window(BulkActions,QMainWindow):
     def __init__(self):
         super().__init__()
         self.manager = Manager(Runner())
@@ -35,10 +39,20 @@ class Window(QMainWindow):
         self.pool = ThreadPoolExecutor(max_workers=1)
         self.update_pool = ThreadPoolExecutor(max_workers=1)
         self.update_future = None
+        self.health_pool = ThreadPoolExecutor(max_workers=1)
+        self.health_future = None
+        self.browse_future = None
+        self.health_results = {}
+        self.health_warned = set()
+        self.health_last = 0
+        self.validation_pool = ThreadPoolExecutor(max_workers=1)
+        self.validation_future = None
+        self.validation_queue = Queue()
+        self.validation_dialog = None
+        self.validation_cancel = Event()
         self.connection_pool = ThreadPoolExecutor(max_workers=1)
         self.connection_future = None
         self.connection_results = {}
-        from threading import Event
         self.connection_cancel = Event()
         self.quota_pool = ThreadPoolExecutor(max_workers=1)
         self.quota_future = None
@@ -71,7 +85,15 @@ class Window(QMainWindow):
         self.update_button.clicked.connect(self.check_updates); toolbar.addWidget(self.update_button)
         button('refresh', self.refresh, toolbar)
         button('diagnostics', self.diagnose, toolbar)
+        self.tools_button=QToolButton();self.tools_button.setText(self.t['tools'])
+        tools_menu=QMenu(self)
+        self.tools_actions={}
+        for key,callback in [('setup_guide',self.setup_guide),('browse_measure',self.browse_measure),('validate_all',self.validation_panel),('export_settings',self.export_settings),('import_settings',self.import_settings)]:
+            action=QAction(self.t[key],self);action.triggered.connect(callback);tools_menu.addAction(action);self.tools_actions[key]=action
+        self.tools_button.setMenu(tools_menu);self.tools_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        toolbar.addWidget(self.tools_button)
         layout.addLayout(toolbar)
+        self.setup_banner=QPushButton(self.t['setup_guide']);self.setup_banner.clicked.connect(self.setup_guide);self.setup_banner.hide();layout.addWidget(self.setup_banner)
         connection_options = QHBoxLayout()
         self.provider_label = QLabel(self.t['provider']); connection_options.addWidget(self.provider_label)
         self.provider = QComboBox()
@@ -113,6 +135,7 @@ class Window(QMainWindow):
         self.label = QLabel(); self.label.setWordWrap(True); layout.addWidget(self.label)
         self.connection_label = QLabel(); self.connection_label.setWordWrap(True)
         layout.addWidget(self.connection_label)
+        self.health_label=QLabel();self.health_label.setWordWrap(True);layout.addWidget(self.health_label)
         quota_header = QHBoxLayout()
         self.quota_label = QLabel(self.t['quota_unknown']); self.quota_label.setWordWrap(True)
         quota_header.addWidget(self.quota_label, 1)
@@ -204,6 +227,10 @@ class Window(QMainWindow):
         if loading_quota: self.quota_label.setText(self.t['quota_loading'])
         elif remote in self.quota_cache: self.show_quota(remote,self.quota_cache[remote][1])
         else: self.quota_label.setText(self.t['quota_unknown'])
+        self.tools_button.setText(self.t['tools']);self.setup_banner.setText(self.t['setup_guide'])
+        for key,action in self.tools_actions.items():action.setText(self.t[key])
+        self.show_health()
+        self.retranslate_bulk_dialogs()
         self.show_connection_result(update_controls=False)
 
     def set_notifications(self, enabled):
@@ -272,6 +299,8 @@ class Window(QMainWindow):
             self.label.setText(self.t['browser_error'])
 
     def tick(self):
+        self.tick_health()
+        self.tick_validation()
         self.tick_connection()
         self.tick_updates()
         self.tick_quota()
@@ -333,7 +362,7 @@ class Window(QMainWindow):
                 # Raw diagnostics may contain OAuth secrets. Never display or log them.
                 self.last_error = True
                 key = self.error_key
-                if isinstance(error, OperationError) and str(error) in {'uploads_pending','uploads_unknown','files_open','needs_write_auth','reauth_identity'}:
+                if isinstance(error, OperationError) and str(error) in {'uploads_pending','uploads_unknown','files_open','needs_write_auth','reauth_identity','portable_busy'}:
                     key = str(error)
                 if isinstance(error, AuthorizationError): key = error.key
                 elif key in {'auth_error', 'credentials_error'} and isinstance(error, OperationError):
@@ -394,7 +423,6 @@ class Window(QMainWindow):
         remote = self.accounts.currentText()
         if not remote or self.connection_future is not None: return
         from .connectivity import check
-        from threading import Event
         self.connection_cancel = Event()
         self.connection_remote = remote
         self.connection_future = self.connection_pool.submit(check, self.manager, remote, self.connection_cancel)
@@ -408,7 +436,7 @@ class Window(QMainWindow):
             self.buttons['check_connection'].setEnabled(bool(remote) and self.connection_future is None)
         if loading: self.connection_label.setText(self.t['connection_checking'])
         elif result is not None:
-            self.connection_label.setText(self.t['connection_last'] + ' · ' + self.t[result.state] + (' · '+self.t['connection_elapsed'].format(seconds=result.seconds) if result.seconds else ''))
+            self.connection_label.setText(self.t['connection_last'] + ' · ' + self.t[result.state] + (' · '+self.t['connection_elapsed'].format(seconds=result.seconds) if result.seconds else '') + (' · '+self.t['cloud_slow'] if slow(result) else ''))
         else: self.connection_label.clear()
 
     def tick_connection(self):
@@ -505,6 +533,9 @@ class Window(QMainWindow):
         self.account_states.clear()
         self.connection_results = {name:result for name,result in self.connection_results.items() if name in names}
         self.notice_tracker.retain(names)
+        self.health_results={name:result for name,result in self.health_results.items() if name in names}
+        from .portable import setup_done
+        self.setup_banner.setVisible(not names and not setup_done(self.manager))
         self.quota_cache = {name:value for name,value in self.quota_cache.items() if name in names}
         self.quota_warned.intersection_update(names)
         current = selected or self.accounts.currentText()
@@ -512,18 +543,21 @@ class Window(QMainWindow):
         if current in names: self.accounts.setCurrentText(current)
         self.accounts.blockSignals(False)
         if names:
+            self.request_health(force=True)
             self.show_connection_result()
             self.poll(); self.request_quota()
         else:
             self.account_menu_button.setEnabled(False)
             self.quota_label.setText(self.t['quota_unknown']); self.quota_bar.hide()
-            self.connection_label.clear()
+            self.connection_label.clear();self.health_label.clear()
             self.label.setText(self.t['empty'])
             self.transfer_table.clear(); self.progress_bar.hide()
             for key in ('mount', 'unmount', 'settings', 'open', 'delete', 'reauth', 'check_connection', 'renew_credentials'):
                 self.buttons[key].setEnabled(False)
 
     def selection_changed(self):
+        self.show_health()
+        self.request_health(force=True)
         self.show_connection_result()
         self.last_error = False
         self.request_quota()
@@ -619,6 +653,10 @@ class Window(QMainWindow):
         size = QSpinBox(); size.setRange(1, 1024); size.setValue(prefs.cache_gib)
         age = QSpinBox(); age.setRange(1, 8760); age.setValue(prefs.cache_hours)
         form.addRow(self.t['cache_size'], size); form.addRow(self.t['cache_age'], age)
+        upload=QSpinBox();download=QSpinBox()
+        for control,value in [(upload,prefs.upload_kib),(download,prefs.download_kib)]:
+            control.setRange(0,1048576);control.setSpecialValueText(self.t['unlimited']);control.setValue(value);control.setSuffix(' KiB/s')
+        form.addRow(self.t['upload_limit'],upload);form.addRow(self.t['download_limit'],download)
         automount = QCheckBox(self.t['automount']); automount.setChecked(prefs.automount)
         form.addRow(automount)
         writable = QCheckBox(self.t['mode_rw']); writable.setChecked(prefs.writable); form.addRow(writable)
@@ -632,7 +670,7 @@ class Window(QMainWindow):
         finally:
             self.timer.start(250)
         if accepted:
-            updated = Preferences(path.text().strip(), size.value(), age.value(), automount.isChecked(), writable.isChecked())
+            updated = Preferences(path.text().strip(), size.value(), age.value(), automount.isChecked(), writable.isChecked(), upload.value(), download.value())
             self.save_account_preferences(remote, updated)
         else:
             self.poll()
@@ -654,8 +692,7 @@ class Window(QMainWindow):
                     QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
                 self.poll()
                 return
-            from threading import Event
-            cancel = Event(); self.oauth_cancel = cancel
+                cancel = Event(); self.oauth_cancel = cancel
             self.browser_url = None
             while not self.oauth_urls.empty(): self.oauth_urls.get_nowait()
             self.label.setText(self.t['auth_wait'])
@@ -669,7 +706,6 @@ class Window(QMainWindow):
         self.submit(save, saved, 'prefs_error')
 
     def ask_internxt_code(self, cancel):
-        from threading import Event
         import time
         event = Event(); answer = {}; self.twofa_requests.put((event, answer))
         deadline = time.monotonic() + 180
@@ -690,7 +726,6 @@ class Window(QMainWindow):
         finally: self.timer.start(250)
         if not accepted: password.clear(); return
         remote = name.text().strip(); user = email.text().strip(); secret = password.text(); password.clear()
-        from threading import Event
         cancel = Event(); self.oauth_cancel = cancel
         self.label.setText(self.t['internxt_wait'])
         if renewal is not None:
@@ -730,7 +765,6 @@ class Window(QMainWindow):
         remote = name.text().strip(); username = user.text().strip(); secret = password.text()
         options = {'url':url.text(), 'code':code.text(), 'mailbox_password':mailbox.text()}
         password.clear(); code.clear(); mailbox.clear()
-        from threading import Event
         cancel = Event(); self.oauth_cancel = cancel
         self.label.setText(self.t['credentials_wait'])
         if renewal is not None:
@@ -741,7 +775,6 @@ class Window(QMainWindow):
                         self.connection_details, 'credentials_error')
 
     def ask_onedrive_drive(self, choices, cancel):
-        from threading import Event
         import time
         event = Event(); answer = {}; self.drive_requests.put((choices, event, answer, cancel))
         deadline = time.monotonic() + 180
@@ -773,7 +806,6 @@ class Window(QMainWindow):
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return
-        from threading import Event
         self.browser_url = None
         while not self.oauth_urls.empty(): self.oauth_urls.get_nowait()
         cancel = Event(); self.oauth_cancel = cancel
@@ -788,7 +820,6 @@ class Window(QMainWindow):
             self.internxt_login(); return
         if self.provider.currentData() in {"webdav", "protondrive"}:
             self.credentials_login(self.provider.currentData()); return
-        from threading import Event
         self.browser_url = None
         while not self.oauth_urls.empty(): self.oauth_urls.get_nowait()
         cancel = Event(); self.oauth_cancel = cancel
@@ -827,7 +858,6 @@ class Window(QMainWindow):
             self.pending_registration = None
             self.refresh()
             return
-        from threading import Event
         prefs = Preferences(path.text().strip(), automount=auto.isChecked(), writable=writable.isChecked())
         remote = name.text().strip()
         def finish():
@@ -888,6 +918,9 @@ class Window(QMainWindow):
         if self.pending_registration is not None:
             self.pending_registration[1].unlink(missing_ok=True)
             self.pending_registration = None
+        self.validation_cancel.set()
+        self.validation_pool.shutdown(wait=False,cancel_futures=True)
+        self.health_pool.shutdown(wait=False,cancel_futures=True)
         self.connection_cancel.set()
         self.connection_pool.shutdown(wait=False, cancel_futures=True)
         self.update_pool.shutdown(wait=False, cancel_futures=True)

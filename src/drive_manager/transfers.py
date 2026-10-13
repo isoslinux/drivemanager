@@ -27,9 +27,12 @@ def pending(endpoint):
     return sum(cache[k] for k in keys)
 
 def dirty_files(cache):
-    root=Path(cache)/'vfsMeta'; count=0
+    cache=Path(cache)
+    if cache.exists() and not cache.is_dir():raise TransferError('uploads_unknown')
+    root=cache/'vfsMeta'; count=0
     if root.is_symlink():raise TransferError('uploads_unknown')
     if not root.exists():return 0
+    if not root.is_dir():raise TransferError('uploads_unknown')
     try:
         for folder,dirs,files in os.walk(root,followlinks=False):
             if any((Path(folder)/name).is_symlink() for name in dirs):raise ValueError()

@@ -1,6 +1,6 @@
 # Validation scope
 
-## Current delivery: 1.18.0
+## Current delivery: 1.19.0
 
 The application, source archive and Fedora 44 noarch RPM are prepared locally.
 Automated tests cover operation safety, account workflows, UI behavior, four
@@ -55,3 +55,10 @@ for Nextcloud, Proton and Internxt. A real private Unix RC probe verified encryp
 configuration replacement, preserved backend options and removal of old tokens
 with synthetic data. Root access was simulated in that probe. Live provider
 password changes and two-factor behavior remain manual acceptance checks.
+
+Version 1.19.0 passes 221 automated tests. Real synthetic Rclone probes validate
+local-alias test-file readback, bandwidth arguments, browsing and private snapshot
+cleanup. A read-only check of the configured Proton account passed in about
+4.6 seconds, with original configuration bytes preserved. Other real providers
+and live cloud writing/FUSE reconnect scenarios are not claimed as passed.
+The new validation panel provides explicit controls and an owner-operated guide.
