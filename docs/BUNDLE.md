@@ -180,3 +180,27 @@ Encrypted application accounts still require KWallet; native GNOME Keyring
 support is not included and existing encrypted accounts are not migrated.
 
 See [ACCEPTANCE-1.19.3.md](ACCEPTANCE-1.19.3.md) for real account evidence.
+
+## 1.19.4: review corrections
+
+Before import, account registration, preference changes and mounting, effective
+mount paths are compared across discovered accounts, including default hash
+folders for accounts with no explicit path or no preference file. The import
+also checks all selected final paths before writing any preferences. Settings
+save independently compares stored accounts using default folders when empty.
+Existing conflicting preferences are not repaired automatically; choose separate
+folders while disconnected. Overlapping batch swaps can still be rejected by
+stored-preference guards; rollback preserves prior bytes.
+
+Starting another check replaces its previous completed activity window. Closed
+activities are deleted by Qt; running activities still request cancellation and
+remain alive until their worker returns. At most one completed window per check
+type is retained for result inspection. Hiding the main window to the tray hides
+its activities too. Cancelled reconnect outcomes use the same message in the
+activity and validation panel, including worker exceptions; a mount that completed
+successfully still reports that success.
+
+Project metadata says Linux; the RPM keeps KWallet because encrypted credentials
+still use it. Browsing guidance now refers to the file manager rather than Dolphin.
+Seven regression tests cover implicit/no-preference paths, selected overlaps,
+dialog destruction and both cancellation result/exception paths.

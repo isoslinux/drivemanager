@@ -2,12 +2,12 @@
 
 ## Install the RPM
 
-Download `drive-manager-1.19.3-1.fc44.noarch.rpm` from
+Download `drive-manager-1.19.4-1.fc44.noarch.rpm` from
 [the latest release](https://github.com/isoslinux/drivemanager/releases/latest).
 Open it with Discover or install/update it from the download folder:
 
 ```bash
-sudo dnf install ./drive-manager-1.19.3-1.fc44.noarch.rpm
+sudo dnf install ./drive-manager-1.19.4-1.fc44.noarch.rpm
 ```
 
 Launch **Drive Manager** from the KDE menu as your normal user, in a graphical

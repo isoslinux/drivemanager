@@ -67,14 +67,15 @@ class Settings:
             if part != '.config': os.chmod(folder, 0o700)
         # Manager's operation lock serializes read/validate/write across instances.
         target = self.path(remote)
-        if prefs.mount_path:
+        effective=Path(prefs.mount_path) if prefs.mount_path else self.home/"DriveManager"/target.stem
+        if effective:
             for other in self.folder.glob('*.json'):
                 if other != target:
                     try: data = json.loads(other.read_text())
                     except (OSError, ValueError): raise OperationError('Cannot validate other accounts') from None
-                    other_path = data.get('mount_path', '')
-                    if other_path and (Path(other_path).is_relative_to(Path(prefs.mount_path))
-                                       or Path(prefs.mount_path).is_relative_to(Path(other_path))):
+                    other_path = data.get('mount_path', '') or str(self.home/'DriveManager'/other.stem)
+                    if other_path and (Path(other_path).is_relative_to(effective)
+                                       or effective.is_relative_to(Path(other_path))):
                         raise OperationError('Mount paths of accounts must not overlap')
         fd, tmp = tempfile.mkstemp(dir=self.folder, prefix='.preferences-')
         try:

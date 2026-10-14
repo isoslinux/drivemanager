@@ -73,6 +73,7 @@ def apply(manager,path,confirmed=False,reviewed=None,selected=None):
                 if provider!=expected_provider or replace(prefs,mount_path=original.mount_path)!=original:raise OperationError('portable_error')
                 manager.settings.validate(prefs);seen.add(name)
             rows=selected
+        manager.validate_mount_targets([(name,prefs) for name,_,prefs in rows])
         names=manager.discover_accounts()
         for name,_,prefs in rows:
             if manager.status(name).state not in {'unmounted','failed'}:raise OperationError('portable_busy')

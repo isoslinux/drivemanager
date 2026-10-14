@@ -133,7 +133,7 @@ class BulkActions:
 
     def cancel_validation(self):
         self.validation_cancel.set()
-        if hasattr(self,"validation_activity"):self.validation_activity.refresh()
+        if self.validation_future is not None:self.validation_activity.refresh()
         self.render_validation()
 
     def start_validation(self,kind):
@@ -171,10 +171,11 @@ class BulkActions:
             if self.validation_dialog is not None:
                 if self.validation_kind=='read':message=self.t['validation_finished']
                 elif self.validation_kind=='write':message=self.t[result.state]+('\n'+self.t['validation_file']+': '+result.file if result.file else '')
-                else:message=self.t['validation_reconnect_ok' if result.state=='mounted' and result.managed else 'validation_error']
+                else:message=self.t[key]
                 self.validation_message.setText(message)
         except Exception:
-            if self.validation_dialog is not None:self.validation_message.setText(self.t['validation_error'])
+            key='connection_cancelled' if self.validation_cancel.is_set() else 'validation_error'
+            if self.validation_dialog is not None:self.validation_message.setText(self.t[key])
         self.validation_activity.complete(key)
         if self.validation_dialog is not None and self.validation_kind=='read' and self.validation_cancel.is_set():self.validation_message.setText(self.t[key])
         self.render_validation()

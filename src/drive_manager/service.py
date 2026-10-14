@@ -203,6 +203,7 @@ class Manager:
         with self.lock():
             self.accounts.validate_name(remote)
             self.settings.validate(prefs)
+            self.validate_mount_targets([(remote,prefs)])
             if not prefs.mount_path:
                 raise OperationError("Choose a mount folder for this account")
             if remote in self.discover_accounts() or self.accounts.path(remote).exists() or self.settings.path(remote).exists():
@@ -240,6 +241,7 @@ class Manager:
                         parser.write(file); file.flush(); os.fsync(file.fileno())
             try:
                 if cancel.is_set(): raise OperationError("Authorization cancelled")
+                self.validate_mount_targets([(remote,prefs)])
                 self.settings.save(remote, prefs)
                 autostart.update(self.settings)
                 if self.accounts.encrypted(staged):
@@ -255,6 +257,17 @@ class Manager:
                 autostart.update(self.settings)
                 raise
             return self.discover_accounts()
+
+    def validate_mount_targets(self,rows):
+        """Check effective paths, including accounts without preference files."""
+        targets={name:Path(prefs.mount_path) if prefs.mount_path else self.home/'DriveManager'/self.settings.path(name).stem for name,prefs in rows}
+        for name in self.discover_accounts():
+            if name not in targets:targets[name]=self.identity(name)[1]
+        items=list(targets.items())
+        for i,(name,path) in enumerate(items):
+            for other,target in items[i+1:]:
+                if path.is_relative_to(target) or target.is_relative_to(path):
+                    raise OperationError('Mount paths of accounts must not overlap')
 
     def identity(self, remote):
         if not remote or any(c in remote for c in "\r\n:/\0") or remote.startswith("-"):
@@ -392,6 +405,7 @@ class Manager:
             if current.state not in {"unmounted", "failed"}:
                 raise OperationError("Unmount this account before changing preferences")
             self.settings.validate(prefs)
+            self.validate_mount_targets([(remote,prefs)])
             if prefs.mount_path:
                 target = Path(prefs.mount_path)
                 for mount in self.mounts():
@@ -423,6 +437,7 @@ class Manager:
             unit, target = self.identity(remote)
             prefs = self.settings.load(remote)
             self.settings.validate(prefs)
+            self.validate_mount_targets([(remote,prefs)])
             if target.is_symlink() or target.parent.is_symlink():
                 raise OperationError("Mount path must not be a symbolic link")
             target.mkdir(parents=True, exist_ok=True, mode=0o700)

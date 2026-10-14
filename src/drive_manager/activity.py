@@ -1,12 +1,15 @@
 """Modeless progress with cooperative cancellation and elapsed time."""
 import time
 from queue import Queue, Empty
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer,Qt
 from PySide6.QtWidgets import QDialog,QVBoxLayout,QLabel,QPushButton,QProgressBar
 
 class Activity(QDialog):
     def __init__(self,parent,title,remote,cancel,stage='connection_checking'):
+        for previous in parent.findChildren(Activity):
+            if previous.title_key==title and previous.finished:previous.close()
         super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.owner=parent;self.cancel=cancel;self.stage=stage;self.remote=remote
         self.started=time.monotonic();self.finished=False;self.result_key=None;self.updates=Queue()
         self.setWindowTitle(parent.t[title]);self.title_key=title;self.resize(540,170)

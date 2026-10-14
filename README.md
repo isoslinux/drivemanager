@@ -13,7 +13,7 @@ Download the `noarch.rpm` from [GitHub Releases](https://github.com/isoslinux/dr
 and open it with Discover, or install/update it from your download folder:
 
 ```bash
-sudo dnf install ./drive-manager-1.19.3-1.fc44.noarch.rpm
+sudo dnf install ./drive-manager-1.19.4-1.fc44.noarch.rpm
 ```
 
 Launch **Drive Manager** from the KDE application menu, as your normal user.
@@ -104,6 +104,7 @@ in the account owner's desktop session. See the validation document for the scop
 
 | Version | Main change |
 | --- | --- |
+| 1.19.4 | Guard implicit mount paths and fix progress dialog lifecycle |
 | 1.19.3 | Selective import and default file manager integration |
 | 1.19.2 | Actionable browsing timing guidance in four languages |
 | 1.19.1 | Visible check progress, elapsed time and cooperative cancellation |

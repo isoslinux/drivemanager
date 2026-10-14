@@ -912,7 +912,10 @@ class Window(BulkActions,QMainWindow):
         self.submit(lambda: (self.manager.open_folder(remote), self.manager.status(remote))[1], self.show_status)
 
     def closeEvent(self, event):
-        if self.tray.isVisible(): self.hide(); event.ignore()
+        if self.tray.isVisible():
+            from .activity import Activity
+            for dialog in self.findChildren(Activity):dialog.hide()
+            self.hide(); event.ignore()
         else: self.quit(); event.accept()
 
     def quit(self):

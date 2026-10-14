@@ -13,6 +13,7 @@ class FakeRunner:
         self.props = props; self.calls = []
     def run(self, args):
         self.calls.append(args)
+        if args[:2]==["rclone","listremotes"]:return "[]"
         return self.props if args[0] == 'systemctl' and 'show' in args else ''
 
 class CoreTests(unittest.TestCase):
@@ -47,7 +48,8 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(self.runner.calls[-1], ['xdg-open', 'file:///other'])
 
     def test_invalid_metadata(self):
-        with self.assertRaises(OperationError): discover(FakeRunner())
+        runner=FakeRunner();runner.run=lambda args:""
+        with self.assertRaises(OperationError): discover(runner)
     def test_mountinfo_escape(self):
         path = Path(self.tmp.name) / 'info'
         path.write_text('1 2 0:1 / /home/a\\040b rw - fuse.rclone account: rw\n')
