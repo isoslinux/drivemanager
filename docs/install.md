@@ -2,12 +2,12 @@
 
 ## Install the RPM
 
-Download `drive-manager-1.19.0-1.fc44.noarch.rpm` from
+Download `drive-manager-1.19.3-1.fc44.noarch.rpm` from
 [the latest release](https://github.com/isoslinux/drivemanager/releases/latest).
 Open it with Discover or install/update it from the download folder:
 
 ```bash
-sudo dnf install ./drive-manager-1.19.0-1.fc44.noarch.rpm
+sudo dnf install ./drive-manager-1.19.3-1.fc44.noarch.rpm
 ```
 
 Launch **Drive Manager** from the KDE menu as your normal user, in a graphical
@@ -75,3 +75,11 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src python3 -m unittest discover -s tests -
 
 Check installation, real authorization, FUSE and desktop notifications from a
 normal KDE session. No real test accounts or tokens are included in the package.
+
+## GNOME integration
+
+The app opens folders with the desktop default through xdg-utils. No Dolphin
+installation is required. Without a tray, closing exits; all controls are in the
+main window. Application-encrypted accounts still use KWallet and require
+kf6-kwallet even under GNOME. GNOME Keyring migration is not implemented.
+A live GNOME session should complete the acceptance steps before deployment.

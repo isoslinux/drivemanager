@@ -1,5 +1,5 @@
 """Strict portable preference files. Credentials and cache contents are excluded."""
-from dataclasses import asdict
+from dataclasses import asdict,replace
 from pathlib import Path
 import json,os,tempfile
 from .settings import Preferences
@@ -59,11 +59,20 @@ def plan(manager,path):
     except Exception:raise OperationError('portable_error') from None
 
 
-def apply(manager,path,confirmed=False,reviewed=None):
+def apply(manager,path,confirmed=False,reviewed=None,selected=None):
     if not confirmed:raise OperationError('portable_error')
     with manager.lock():
         rows=plan(manager,path);originals={}
         if reviewed is not None and rows!=reviewed:raise OperationError("portable_error")
+        if selected is not None:
+            available={name:(provider,prefs) for name,provider,prefs in rows};seen=set()
+            if not selected:raise OperationError('portable_error')
+            for name,provider,prefs in selected:
+                if name in seen or name not in available:raise OperationError('portable_error')
+                expected_provider,original=available[name]
+                if provider!=expected_provider or replace(prefs,mount_path=original.mount_path)!=original:raise OperationError('portable_error')
+                manager.settings.validate(prefs);seen.add(name)
+            rows=selected
         names=manager.discover_accounts()
         for name,_,prefs in rows:
             if manager.status(name).state not in {'unmounted','failed'}:raise OperationError('portable_busy')

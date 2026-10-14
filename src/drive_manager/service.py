@@ -534,4 +534,4 @@ class Manager:
         status = self.status(remote)
         if status.state not in {"mounted", "external"}:
             raise OperationError("Connection is not mounted")
-        self.runner.launch(["dolphin", "--new-window", status.path])
+        self.runner.launch(["xdg-open", Path(status.path).as_uri()])

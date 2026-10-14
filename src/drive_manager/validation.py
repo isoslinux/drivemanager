@@ -3,13 +3,14 @@ from .connectivity import check
 from .providers import ACTIVE_TYPES
 
 
-def read_all(manager,cancel,on_result=None):
+def read_all(manager,cancel,on_result=None,on_start=None):
     rows=[]
     if cancel.is_set():return rows
     for remote in manager.discover_accounts():
         if cancel.is_set():break
         provider=manager.provider_of(remote)
         if provider not in ACTIVE_TYPES:continue
+        if on_start:on_start("connection_checking",remote)
         result=check(manager,remote,cancel);row=(remote,provider,result);rows.append(row)
         if on_result:on_result(row)
     return rows

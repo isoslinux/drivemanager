@@ -110,7 +110,7 @@ def collect(manager, remote='', probe=None, which=shutil.which, device=Path('/de
     except OSError:
         available = False
     checks.append(Check('device','ok' if available else 'error','installed' if available else 'device_unavailable'))
-    for name,exe in [('systemd_run','systemd-run'),('dolphin','dolphin'),('fuser','fuser'),('wallet','kwallet-query')]:
+    for name,exe in [('systemd_run','systemd-run'),('dolphin','xdg-open'),('fuser','fuser'),('wallet','kwallet-query')]:
         available = bool(which(exe))
         checks.append(Check(name,'ok' if available else 'warning' if name=='wallet' else 'error',
                             'installed' if available else 'missing_'+name))
@@ -155,3 +155,7 @@ def format_report(report, language='en'):
         version = ' '+check.version if re.fullmatch(r'\d{1,4}(?:\.\d{1,3}){0,2}',check.version) else ''
         lines.append(f'{t[check.state]} · {t[check.name]}{version}: {t[check.message]}')
     return '\n'.join(lines+['',t['footer']])
+
+CATALOG['en'].update({'dolphin': 'Default file manager launcher', 'missing_dolphin': 'Install xdg-utils and configure a default file manager.'})
+
+CATALOG['es'].update({'dolphin': 'Apertura con gestor predeterminado', 'missing_dolphin': 'Instala xdg-utils y configura un gestor de archivos predeterminado.'})

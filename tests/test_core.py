@@ -40,11 +40,11 @@ class CoreTests(unittest.TestCase):
         snapshot.write_text('updated token')
         self.assertIn('SECRET', source.read_text())
 
-    def test_dolphin_launch_is_detached(self):
+    def test_default_file_manager_launch_is_detached(self):
         self.manager.mounts = lambda: [Mount('/other', 'account:', 'fuse.rclone')]
         self.runner.launch = lambda args: self.runner.calls.append(args)
         self.manager.open_folder('account')
-        self.assertEqual(self.runner.calls[-1], ['dolphin', '--new-window', '/other'])
+        self.assertEqual(self.runner.calls[-1], ['xdg-open', 'file:///other'])
 
     def test_invalid_metadata(self):
         with self.assertRaises(OperationError): discover(FakeRunner())

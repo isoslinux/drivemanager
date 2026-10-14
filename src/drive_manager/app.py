@@ -425,6 +425,8 @@ class Window(BulkActions,QMainWindow):
         from .connectivity import check
         self.connection_cancel = Event()
         self.connection_remote = remote
+        from .activity import Activity
+        self.connection_activity = Activity(self,"check_connection",remote,self.connection_cancel)
         self.connection_future = self.connection_pool.submit(check, self.manager, remote, self.connection_cancel)
         self.show_connection_result()
 
@@ -448,6 +450,7 @@ class Window(BulkActions,QMainWindow):
         names = [self.accounts.item(row,0).text() for row in range(self.accounts.rowCount())]
         if self.connection_remote in names:
             self.connection_results[self.connection_remote] = result
+        self.connection_activity.complete(result.state)
         self.show_connection_result()
 
     def refresh_quota(self):
@@ -918,6 +921,7 @@ class Window(BulkActions,QMainWindow):
         if self.pending_registration is not None:
             self.pending_registration[1].unlink(missing_ok=True)
             self.pending_registration = None
+        if hasattr(self,"browse_cancel"):self.browse_cancel.set()
         self.validation_cancel.set()
         self.validation_pool.shutdown(wait=False,cancel_futures=True)
         self.health_pool.shutdown(wait=False,cancel_futures=True)

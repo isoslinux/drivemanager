@@ -272,3 +272,39 @@ class BulkTests(unittest.TestCase):
         self.update_export(lambda data:data['accounts'][0]['preferences'].update(writable=True))
         with self.assertRaises(OperationError):portable.apply(self.manager,self.file,True)
         self.assertFalse(self.manager.settings.load('a').writable)
+
+class SelectiveImportTests(unittest.TestCase):
+    setUp=BulkTests.setUp
+    exported=BulkTests.exported
+    update_export=BulkTests.update_export
+    def test_selected_import_changes_only_one_account(self):
+        self.exported();rows=portable.plan(self.manager,self.file);before=self.manager.settings.path('b').read_bytes()
+        selected=[(rows[0][0],rows[0][1],replace(rows[0][2],mount_path=str(self.home/'New/a')))]
+        with patch.object(self.manager,'status',return_value=Status('unmounted','')),patch.object(self.manager,'ensure_no_dirty_cache'),patch('drive_manager.portable.autostart.update'):
+            portable.apply(self.manager,self.file,True,rows,selected)
+        self.assertEqual(self.manager.settings.load('a').mount_path,str(self.home/'New/a'))
+        self.assertEqual(self.manager.settings.path('b').read_bytes(),before)
+
+    def test_selected_import_rejects_changed_file(self):
+        self.exported();rows=portable.plan(self.manager,self.file);self.update_export(lambda data:data['accounts'][0]['preferences'].update(upload_kib=3))
+        with self.assertRaises(OperationError):portable.apply(self.manager,self.file,True,rows,[rows[0]])
+
+    def test_selected_import_rejects_empty_duplicate_or_access_change(self):
+        self.exported();rows=portable.plan(self.manager,self.file)
+        for selection in [[],[rows[0],rows[0]],[(rows[0][0],rows[0][1],replace(rows[0][2],writable=True))]]:
+            with self.assertRaises(OperationError):portable.apply(self.manager,self.file,True,rows,selection)
+
+    def test_import_editor_selects_and_edits_folder_in_four_languages(self):
+        from PySide6.QtWidgets import QApplication,QWidget
+        from PySide6.QtCore import Qt
+        from drive_manager.import_ui import ImportReview
+        from drive_manager.messages import TEXT
+        app=QApplication.instance() or QApplication([])
+        self.exported();rows=portable.plan(self.manager,self.file)
+        for language in ['en','es','fr','de']:
+            owner=QWidget();owner.t=TEXT[language];owner.manager=self.manager
+            dialog=ImportReview(owner,rows)
+            dialog.controls[1][0].setCheckState(Qt.CheckState.Unchecked);dialog.controls[0][1].setText(str(self.home/'Chosen'))
+            self.assertEqual(len(dialog.selected()),1);self.assertEqual(dialog.selected()[0][2].mount_path,str(self.home/'Chosen'))
+            dialog.controls[0][0].setCheckState(Qt.CheckState.Unchecked);self.assertFalse(dialog.save.isEnabled())
+            dialog.reject();owner.close()

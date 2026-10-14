@@ -1,7 +1,7 @@
 Name:           drive-manager
-Version:        1.19.0
+Version:        1.19.3
 Release:        1%{?dist}
-Summary:        Multi-account cloud drive desktop manager for KDE
+Summary:        Multi-account cloud drive desktop manager for Linux
 License:        MIT
 Source0:        %{name}-%{version}.tar.gz
 BuildArch:      noarch
@@ -14,7 +14,7 @@ Requires:       rclone >= 1.73
 Requires:       fuse3
 Requires:       psmisc
 Requires:       systemd
-Requires:       dolphin
+Requires:       xdg-utils
 Requires:       kf6-kwallet
 
 %description
@@ -47,6 +47,15 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src %{python3} -m unittest discover -s test
 %{_datadir}/applications/drive-manager.desktop
 
 %changelog
+* Thu Oct 15 2026 Drive Manager contributors - 1.19.3-1
+- Select imported accounts and target folders; use the default file manager
+
+* Thu Oct 15 2026 Drive Manager contributors - 1.19.2-1
+- Explain browsing latency results with actionable translated guidance
+
+* Thu Oct 15 2026 Drive Manager contributors - 1.19.1-1
+- Show elapsed check progress and cooperative cancellation in four languages
+
 * Wed Oct 14 2026 Drive Manager contributors - 1.19.0-1
 - Add the six-area validation, performance and portability bundle
 - Preserve source credentials, pending cache and explicit service confirmations

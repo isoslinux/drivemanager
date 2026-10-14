@@ -85,19 +85,14 @@ class BulkActions:
 
     def preview_import(self,path,rows):
         from .portable import apply
-        dialog=QDialog(self);dialog.setWindowTitle(self.t['import_settings']);dialog.resize(700,400)
-        layout=QVBoxLayout(dialog);note=QLabel(self.t['import_note']);note.setWordWrap(True);layout.addWidget(note)
-        text=QPlainTextEdit();text.setReadOnly(True)
-        text.setPlainText('\n\n'.join(name+' · '+next(p.label for p in PROVIDERS if p.key==provider)+'\n'+(prefs.mount_path or str(self.manager.home/'DriveManager'/self.manager.settings.path(name).stem))+'\n'+
-            self.t['mode_rw' if prefs.writable else 'mode_ro']+' · '+self.t['automount']+': '+('✓' if prefs.automount else '—')+'\n'+
-            self.t['upload_limit']+': '+str(prefs.upload_kib)+' KiB/s · '+self.t['download_limit']+': '+(str(prefs.download_kib)+' KiB/s' if prefs.download_kib else self.t['unlimited'])
-            for name,provider,prefs in rows));layout.addWidget(text)
-        buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Save|QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(dialog.accept);buttons.rejected.connect(dialog.reject);layout.addWidget(buttons)
+        from .import_ui import ImportReview
+        dialog=ImportReview(self,rows)
         self.timer.stop()
         try:accepted=dialog.exec()==QDialog.DialogCode.Accepted
         finally:self.timer.start(250)
-        if accepted:self.submit(lambda:apply(self.manager,path,confirmed=True,reviewed=rows),self.set_accounts,'portable_error')
+        if accepted:
+            selected=dialog.selected()
+            self.submit(lambda:apply(self.manager,path,confirmed=True,reviewed=rows,selected=selected),self.set_accounts,'portable_error')
 
     def validation_panel(self):
         if self.validation_dialog is not None:self.validation_dialog.show();return
@@ -110,7 +105,7 @@ class BulkActions:
         controls=QHBoxLayout();self.validation_controls=[];self.validation_buttons={}
         for key,kind in [('validate_all','read'),('validation_write','write'),('validation_reconnect','reconnect')]:
             button=QPushButton(self.t[key]);button.clicked.connect(lambda checked=False,kind=kind:self.start_validation(kind));controls.addWidget(button);self.validation_controls.append(button);self.validation_buttons[key]=button
-        cancel=QPushButton(self.t['cancel_oauth']);self.validation_buttons['cancel_oauth']=cancel;cancel.clicked.connect(lambda:self.validation_cancel.set());controls.addWidget(cancel);layout.addLayout(controls)
+        cancel=QPushButton(self.t['operation_cancel']);self.validation_buttons['operation_cancel']=cancel;cancel.clicked.connect(self.cancel_validation);controls.addWidget(cancel);layout.addLayout(controls)
         guide=QPushButton(self.t['validation_guide']);self.validation_buttons['validation_guide']=guide;guide.clicked.connect(self.acceptance_guide);layout.addWidget(guide)
         self.validation_rows=getattr(self,'validation_rows',{})
         self.validation_dialog=dialog;self.render_validation()
@@ -133,6 +128,13 @@ class BulkActions:
         self.validation_table.horizontalHeader().setSectionResizeMode(2,QHeaderView.ResizeMode.Stretch)
         self.validation_table.resizeRowsToContents()
         for button in self.validation_controls:button.setEnabled(self.validation_future is None)
+        self.validation_selector.setEnabled(self.validation_future is None)
+        self.validation_buttons['operation_cancel'].setEnabled(self.validation_future is not None and not self.validation_cancel.is_set())
+
+    def cancel_validation(self):
+        self.validation_cancel.set()
+        if hasattr(self,"validation_activity"):self.validation_activity.refresh()
+        self.render_validation()
 
     def start_validation(self,kind):
         if self.validation_future is not None:return
@@ -143,7 +145,10 @@ class BulkActions:
             message=self.t['validation_write_confirm' if kind=='write' else 'validation_reconnect_confirm']+'\n'+remote
             if QMessageBox.question(self,self.t['validate_all'],message,QMessageBox.StandardButton.Yes|QMessageBox.StandardButton.No,QMessageBox.StandardButton.No)!=QMessageBox.StandardButton.Yes:return
         self.validation_cancel=Event();self.validation_kind=kind;self.validation_remote=remote
-        if kind=='read':self.validation_future=self.validation_pool.submit(read_all,self.manager,self.validation_cancel,self.validation_queue.put)
+        from .activity import Activity
+        stage={'read':'connection_checking','write':'validation_write','reconnect':'validation_reconnect'}[kind]
+        self.validation_activity=Activity(self,'validate_all',remote if kind!='read' else '',self.validation_cancel,stage)
+        if kind=='read':self.validation_future=self.validation_pool.submit(read_all,self.manager,self.validation_cancel,self.validation_queue.put,self.validation_activity.report)
         elif kind=='write':self.validation_future=self.validation_pool.submit(write_test,self.manager,remote,self.validation_cancel,True)
         else:self.validation_future=self.validation_pool.submit(reconnect,self.manager,remote,True,self.validation_cancel)
         self.validation_message.setText(self.t['connection_checking']);self.render_validation()
@@ -157,8 +162,12 @@ class BulkActions:
         except Empty:pass
         if self.validation_future is None or not self.validation_future.done():return
         future,self.validation_future=self.validation_future,None
+        key="validation_error"
         try:
             result=future.result()
+            if self.validation_kind=='read':key='connection_cancelled' if self.validation_cancel.is_set() else 'validation_finished'
+            elif self.validation_kind=='write':key=result.state
+            else:key='validation_reconnect_ok' if result.state=='mounted' and result.managed else ('connection_cancelled' if self.validation_cancel.is_set() else 'validation_error')
             if self.validation_dialog is not None:
                 if self.validation_kind=='read':message=self.t['validation_finished']
                 elif self.validation_kind=='write':message=self.t[result.state]+('\n'+self.t['validation_file']+': '+result.file if result.file else '')
@@ -166,6 +175,8 @@ class BulkActions:
                 self.validation_message.setText(message)
         except Exception:
             if self.validation_dialog is not None:self.validation_message.setText(self.t['validation_error'])
+        self.validation_activity.complete(key)
+        if self.validation_dialog is not None and self.validation_kind=='read' and self.validation_cancel.is_set():self.validation_message.setText(self.t[key])
         self.render_validation()
 
     def acceptance_guide(self):
@@ -189,7 +200,10 @@ class BulkActions:
         remote=self.accounts.currentText()
         if not remote or self.browse_future is not None:return
         self.browse_remote=remote;self.tools_actions['browse_measure'].setEnabled(False)
-        self.browse_future=self.health_pool.submit(browse,self.manager,remote)
+        from .activity import Activity
+        self.browse_cancel=Event()
+        self.browse_activity=Activity(self,'browse_measure',remote,self.browse_cancel,'operation_status')
+        self.browse_future=self.health_pool.submit(browse,self.manager,remote,self.browse_cancel,self.browse_activity.report)
 
     def tick_browse(self):
         if self.browse_future is None or not self.browse_future.done():return
@@ -197,7 +211,10 @@ class BulkActions:
         self.tools_actions['browse_measure'].setEnabled(True)
         try:result=future.result()
         except Exception:result=None
-        if self.browse_remote!=self.accounts.currentText():return
+        self.browse_activity.complete('connection_cancelled' if self.browse_cancel.is_set() else 'operation_finished')
+        if self.browse_cancel.is_set() or self.browse_remote!=self.accounts.currentText():return
         value=lambda seconds:'—' if seconds is None else f'{seconds:.1f} s'
         text=self.t['browse_result'].format(listing=value(result.listing) if result else '—',space=value(result.space) if result else '—')
-        QMessageBox.information(self,self.t['browse_measure'],text+'\n\n'+self.t['browse_note'])
+        from .performance import browsing_advice
+        advice=self.t[browsing_advice(result)]
+        QMessageBox.information(self,self.t['browse_measure'],text+'\n\n'+advice+'\n\n'+self.t['browse_scope'])

@@ -124,3 +124,59 @@ remain account-owner acceptance scenarios in the new panel.
 
 References: [Rclone bandwidth limits](https://rclone.org/docs/#bwlimit-bwtimetable),
 [Rclone mount and VFS](https://rclone.org/commands/rclone_mount/).
+
+## 1.19.1: visible progress and cooperative cancellation
+
+Connection checks, batch acceptance and browsing probes show a modeless activity
+window with the account, current phase and elapsed seconds. Closing a running
+activity requests cancellation; it stays visible until the worker returns.
+The cancelling state disables repeated requests. No progress percentage is
+invented. Batch checks report the current account before reading its root.
+
+Browsing cancellation stops only the disposable probe process and skips further
+measurements. Mount-status commands and private snapshot setup can take until
+their existing bounded operation returns. Cancellation is cooperative, not an
+immediate guarantee. A reconnect already started still attempts mounting;
+pending uploads and real mounts are never forcibly stopped by cancellation.
+Write-test files and pending data remain preserved as in 1.19.0.
+
+All four language catalogs cover the activity window. Six regression tests cover
+window close, elapsed time, translation, batch phase reporting and probe cleanup.
+
+## 1.19.2: actionable browsing results
+
+The browsing result explains incomplete measurements, slow enumeration, slow
+filesystem-space queries, both slow queries or both queries under two seconds.
+Two seconds is an advisory threshold, not a provider SLA or proof of a cause.
+Missing results are never classified as fast. Slow root enumeration suggests
+comparing connection checks, folder size and cache effects; slow space queries
+suggest comparing the separate quota check without automatically changing mount
+flags. If both probes are fast, compare Dolphin without previews and automatic
+folder-size calculation where supported. No Dolphin settings are modified.
+
+The existing ten-second limits, cancellation and privacy protections remain.
+Only mounted-root queries are measured: file opening, nested folders, thumbnail
+generation and upload completion are not validated. Warm caches can affect times.
+Three regression tests cover threshold combinations, missing data and four
+language catalogs.
+
+## 1.19.3: selective import and desktop integration
+
+Import review has account checkboxes, editable target folders and folder pickers.
+The preview includes the imported access mode, login mounting and transfer limits.
+Only checked accounts are applied; an empty selection disables application.
+The source file is revalidated against the original review, while selected rows
+may change only their mount folder. Unknown accounts, duplicate selections, unsafe
+paths, current mounts and dirty caches remain rejected. Unselected preference
+files are not written. A failure rolls back selected preference bytes.
+
+Folder opening now uses `xdg-open` with an escaped absolute file URI. KDE can
+resolve Dolphin and GNOME can resolve Files/Nautilus through the desktop default.
+The RPM requires xdg-utils instead of Dolphin. No default associations are changed.
+All account actions remain available in the main window. Without an available
+tray, closing quits instead of hiding an inaccessible window. These paths are
+covered by automated tests; a real GNOME graphical session has not been tested.
+Encrypted application accounts still require KWallet; native GNOME Keyring
+support is not included and existing encrypted accounts are not migrated.
+
+See [ACCEPTANCE-1.19.3.md](ACCEPTANCE-1.19.3.md) for real account evidence.
