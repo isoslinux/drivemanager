@@ -4,8 +4,10 @@ from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import Mock,patch
 from PySide6.QtWidgets import QApplication,QWidget
+from PySide6.QtCore import QCoreApplication,QEvent
+from shiboken6 import isValid
 from drive_manager.activity import Activity
-from drive_manager.messages import TEXT
+from drive_manager.i18n import TEXT
 from drive_manager.performance import browse
 from drive_manager.validation import read_all
 
@@ -19,7 +21,10 @@ class ActivityTests(TestCase):
         self.addCleanup(self.cleanup)
 
     def cleanup(self):
-        self.dialog.complete('operation_finished');self.dialog.reject();self.owner.close()
+        if isValid(self.dialog):
+            self.dialog.complete('operation_finished');self.dialog.reject()
+        self.owner.deleteLater()
+        QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
 
     def test_cancel_remains_visible_until_worker_finishes(self):
         self.dialog.reject();self.assertTrue(self.cancel.is_set())

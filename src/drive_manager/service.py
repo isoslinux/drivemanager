@@ -258,15 +258,30 @@ class Manager:
                 raise
             return self.discover_accounts()
 
-    def validate_mount_targets(self,rows):
+    def validate_mount_targets(self,rows,tolerate_corrupt=False):
         """Check effective paths, including accounts without preference files."""
         targets={name:Path(prefs.mount_path) if prefs.mount_path else self.home/'DriveManager'/self.settings.path(name).stem for name,prefs in rows}
+        changed=set(targets)
         for name in self.discover_accounts():
-            if name not in targets:targets[name]=self.identity(name)[1]
+            if name in targets:continue
+            try:targets[name]=self.identity(name)[1]
+            except OperationError:
+                if not tolerate_corrupt:raise OperationError('Cannot validate preferences for account: '+name) from None
+                # A damaged account cannot mount until repaired. Reserve its default
+                # and protect all actual FUSE mounts, without rewriting its JSON.
+                targets[name]=self.home/'DriveManager'/self.settings.path(name).stem
+        if tolerate_corrupt:
+            for mount in self.mounts():
+                if mount.kind.startswith('fuse'):
+                    path=Path(mount.path)
+                    for name in changed:
+                        target=targets[name]
+                        if target.is_relative_to(path) or path.is_relative_to(target):
+                            raise OperationError('Mount path is already in use')
         items=list(targets.items())
         for i,(name,path) in enumerate(items):
             for other,target in items[i+1:]:
-                if path.is_relative_to(target) or target.is_relative_to(path):
+                if (name in changed or other in changed) and (path.is_relative_to(target) or target.is_relative_to(path)):
                     raise OperationError('Mount paths of accounts must not overlap')
 
     def identity(self, remote):
@@ -437,7 +452,7 @@ class Manager:
             unit, target = self.identity(remote)
             prefs = self.settings.load(remote)
             self.settings.validate(prefs)
-            self.validate_mount_targets([(remote,prefs)])
+            self.validate_mount_targets([(remote,prefs)],tolerate_corrupt=True)
             if target.is_symlink() or target.parent.is_symlink():
                 raise OperationError("Mount path must not be a symbolic link")
             target.mkdir(parents=True, exist_ok=True, mode=0o700)

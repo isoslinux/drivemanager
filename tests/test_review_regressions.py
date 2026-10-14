@@ -62,3 +62,22 @@ class UiRegressionTests(TestCase):
         BulkActions.tick_validation(owner)
         owner.validation_activity.complete.assert_called_once_with('connection_cancelled')
         owner.validation_message.setText.assert_called_once_with(TEXT['es']['connection_cancelled'])
+
+class CorruptPreferenceTests(TestCase):
+    setUp=fixtures.BulkTests.setUp
+    def test_healthy_mount_ignores_damaged_unmounted_other_and_preserves_bytes(self):
+        bad=self.manager.settings.path('b');bad.write_text('{corrupt');before=bad.read_bytes()
+        with patch('drive_manager.service.shutil.which',return_value='/usr/bin/rclone'):self.manager.mount('a')
+        self.assertEqual(bad.read_bytes(),before)
+        self.assertTrue(any(c[0]=='systemd-run' for c in self.manager.runner.calls))
+    def test_corrupt_accounts_default_remains_reserved(self):
+        self.manager.settings.path('b').write_text('{corrupt');target=self.home/'DriveManager'/self.manager.settings.path('b').stem
+        with self.assertRaises(OperationError):self.manager.validate_mount_targets([('a',Preferences(str(target)))],True)
+    def test_actual_fuse_mount_of_corrupt_account_still_protected(self):
+        from drive_manager.mounts import Mount
+        self.manager.settings.path('b').write_text('{corrupt')
+        with patch.object(self.manager,'mounts',return_value=[Mount(str(self.home/'Drives/a'),'b:','fuse.rclone')]):
+            with self.assertRaises(OperationError):self.manager.validate_mount_targets([('a',self.manager.settings.load('a'))],True)
+    def test_preference_changes_name_corrupt_account(self):
+        self.manager.settings.path('b').write_text('{corrupt')
+        with self.assertRaisesRegex(OperationError,'account: b'):self.manager.validate_mount_targets([('a',self.manager.settings.load('a'))])

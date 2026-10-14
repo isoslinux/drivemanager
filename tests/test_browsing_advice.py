@@ -1,6 +1,6 @@
 from unittest import TestCase
 from drive_manager.performance import BrowseTiming,browsing_advice
-from drive_manager.messages import TEXT
+from drive_manager.i18n import TEXT
 
 class BrowsingAdviceTests(TestCase):
     def test_measured_combinations_and_threshold(self):

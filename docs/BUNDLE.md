@@ -204,3 +204,25 @@ Project metadata says Linux; the RPM keeps KWallet because encrypted credentials
 still use it. Browsing guidance now refers to the file manager rather than Dolphin.
 Seven regression tests cover implicit/no-preference paths, selected overlaps,
 dialog destruction and both cancellation result/exception paths.
+
+## 1.19.5: Qt test lifetime and damaged-account isolation
+
+Activity tests delete the owner through Qt and drain DeferredDelete events before
+releasing Python references. Cleanup checks whether the dialog still exists.
+They explicitly load every language catalog, removing an import-order dependency.
+Three fresh-process runs of test_activity followed by test_bulk passed. This
+validates that test order in this environment; it does not prove every Qt version
+has identical lifetime behavior. WA_DeleteOnClose remains in the application.
+
+Mounting a healthy account tolerates another account’s unreadable preferences.
+The unreadable account cannot mount until repaired, and its default hash path
+remains reserved. All actual FUSE mount paths remain protected. No corrupt file
+is overwritten, quarantined or silently replaced with defaults. Known paths are
+still compared, while conflicts solely between unrelated accounts no longer
+block the selected account. Registration, imports and preference changes remain
+strict about unreadable accounts rather than guessing an unknown custom path.
+Restoring or changing preferences revalidates paths before an account can mount.
+
+English and Spanish browsing guidance grammar was corrected. Four regression
+tests exercise healthy mounting, byte preservation, reserved default folders,
+active FUSE protection and strict validation of damaged accounts.
