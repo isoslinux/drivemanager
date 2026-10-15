@@ -117,9 +117,7 @@ Offscreen Qt checks cover setup, validation, speed controls and all four catalog
 
 A real Rclone synthetic local-alias probe passed independent test-file readback,
 bandwidth-flag parsing, browsing measurements and snapshot cleanup. It does not
-exercise cloud uploads or FUSE. A read-only check of the configured Proton account
-also passed in approximately 4.6 seconds, preserving source configuration bytes.
-Other real providers, password flows, live FUSE uploads and service reconnects
+exercise cloud uploads or FUSE. Other real providers, password flows, live FUSE uploads and service reconnects
 remain account-owner acceptance scenarios in the new panel.
 
 References: [Rclone bandwidth limits](https://rclone.org/docs/#bwlimit-bwtimetable),
@@ -179,7 +177,7 @@ covered by automated tests; a real GNOME graphical session has not been tested.
 Encrypted application accounts still require KWallet; native GNOME Keyring
 support is not included and existing encrypted accounts are not migrated.
 
-See [ACCEPTANCE-1.19.3.md](ACCEPTANCE-1.19.3.md) for real account evidence.
+See the [provider acceptance guide](ACCEPTANCE-1.19.3.md) for manual validation.
 
 ## 1.19.4: review corrections
 
@@ -226,3 +224,108 @@ Restoring or changing preferences revalidates paths before an account can mount.
 English and Spanish browsing guidance grammar was corrected. Four regression
 tests exercise healthy mounting, byte preservation, reserved default folders,
 active FUSE protection and strict validation of damaged accounts.
+
+## 1.19.6: public documentation and launcher resilience
+
+The provider acceptance page is a generic checklist, with no account-owner
+provider inventory or session-specific results. Current validation metadata and
+the package docstring reflect the full read/write application. Git ignore rules
+exclude RPMs, source archives, rpmbuild and pytest caches. These rules do not
+remove previously tracked files or erase prior commits.
+
+Login launcher generation parses and validates each preference independently.
+Corrupt JSON, invalid types/unknown fields and symlinks do not enable automount
+and are left unchanged. Healthy accounts can still request an owned launcher.
+If none qualify, only the application's own launcher is removed; a foreign
+launcher is never replaced or removed. No service is stopped by this operation.
+Mount-target validation for registration/import/preference editing remains strict
+about unknown custom paths in corrupt files; repair is required for those edits.
+This change fixes launcher generation independently of that intentional guard.
+
+Five regression tests cover corruption, invalid types, symlinks, owned launcher
+removal and preservation of foreign launchers. The suite contains 254 tests.
+Token snapshot renewal policy, native GNOME key storage and broader formatting
+cleanup are unchanged; provider refresh behavior needs separate live acceptance.
+
+## 1.19.7: runtime corrections and recovery tools
+
+Read/write OAuth upgrade now initializes its cancellation event after confirmation.
+Asynchronous mount, disconnect, folder-opening and settings results are bound to
+the account that started them; changing selection does not overwrite another row.
+
+Tools → Recover disconnected mount requires explicit confirmation and an exact
+Rclone source/path match for the selected account. It accepts only inactive/failed
+services and an ENOTCONN filesystem, checked in a bounded child. Dirty local cache,
+open files, healthy mounts, foreign sources and active services prevent recovery.
+Only normal fusermount3 -u is used; no lazy/forced unmount or service stop occurs.
+Unavailable service information or a timed-out probe fails closed. Some orphans
+therefore still require diagnosis through their original tools.
+
+Tools → Repair damaged preferences also requires confirmation. It rejects valid
+preferences, active services, matching FUSE mounts, unsafe paths and pending cache.
+The original damaged JSON is retained privately in the state directory’s
+preference-backups folder; removing it enables default read-only preferences
+with automatic mounting off. Assign the desired folder again afterwards.
+Credentials, authorization and cache are not modified. Failed launcher updates
+restore the damaged original. Damaged account state is displayed separately.
+
+The validation panel can remove its last retained test file per account in the
+current session. Explicit confirmation, a managed writable clean mount, exact
+generated filename and unchanged disposable payload are required. User-modified
+files and ordinary files are preserved. Deletion is requested through FUSE; its
+cloud completion is not independently verified. Retention remains the default.
+
+Account refresh runs every five seconds. External provider metadata is read once
+per batch; local account metadata does not require Rclone listremotes. Writable
+status reuses progress VFS counters rather than requesting them a second time.
+Systemd state is still queried per account; actual process rates depend on other
+checks and the number of external connections. Missing transfer data remains unsafe.
+
+Connection checks and plain-config quota queries now share private_snapshot with
+independent temporary directories and cleanup. Encrypted background quota still
+uses the existing private mount RC; token-copy refresh policy is unchanged.
+Duplicate registration overlap logic was removed. Non-object preference JSON
+produces a controlled error. Imports in the four reviewed utility modules were
+moved to module scope. Regression tests exercise authorization, status selection,
+repair/recovery guards, metadata query count, VFS reuse and test-file deletion.
+
+## 1.19.8: recovery, retained tests and independent safety flags
+
+Recover disconnected mount no longer rejects dirty cache. It does not remove,
+rewrite or move cache contents. Exact source/path, an inactive/failed service,
+ENOTCONN and closed files remain required. Reconnecting with the original writable
+preferences reuses the existing cache so Rclone can retry uploads; successful
+cloud completion still requires monitoring. Healthy and active mounts are not
+affected. Preference repair retains its clean-cache requirement.
+
+Retained test filenames are stored privately per account in the application state
+directory, before fixture creation. Multiple entries survive application restart.
+Select the desired filename in the validation panel. Find previous test files
+lists only root candidates matching the generated test namespace, allowing older
+fixtures to be recovered into the registry. Discovery does not prove provenance:
+every deletion still checks the exact disposable payload and file identity.
+The registry is limited to 1,000 filenames per account and 128 KiB, rejects
+symlinks and arbitrary names and contains no tokens or document contents.
+
+Cleanup receives the operation cancellation event. Verification runs in a bounded
+child outside the global operation lock. The final phase rechecks mount ownership,
+path, writing and pending uploads under the lock; its child rereads the payload,
+checks identity and unlinks, with a ten-second limit. A cancelled or timed-out
+operation kills only its child process group, with a one-second reap bound.
+An uninterruptible kernel operation may outlive that bound; no force-unmount is
+used. Cancellation can race a deletion already sent to FUSE, so unsuccessful
+outcomes keep the registry entry. Cloud deletion is still not independently
+verified. External file modification races cannot be entirely eliminated.
+
+A successful deletion request removes only that registry entry. Modified files,
+ordinary names and other recorded test files remain intact. For a missing or
+modified historical fixture, inspect the provider and delete it manually.
+
+Polling failures now display status query unavailable; preference corruption is
+reported only by the preference-loading path. Transfer progress preserves the
+out-of-space flag independently of network/authentication classification. Full
+cache space always makes pending uploads unknown, never falsely clean.
+
+Eleven new regression tests cover dirty-cache preservation, disk-full combinations,
+query labeling, persisted multi-file records, discovery, cancellation/timeouts,
+verification outside the lock and deletion of one selected fixture.

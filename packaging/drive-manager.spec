@@ -1,5 +1,5 @@
 Name:           drive-manager
-Version:        1.19.5
+Version:        1.19.8
 Release:        1%{?dist}
 Summary:        Multi-account cloud drive desktop manager for Linux
 License:        MIT
@@ -47,6 +47,18 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src %{python3} -m unittest discover -s test
 %{_datadir}/applications/drive-manager.desktop
 
 %changelog
+* Thu Oct 15 2026 Drive Manager contributors - 1.19.8-1
+- Preserve pending cache during dead FUSE recovery
+- Bound and cancel cleanup; persist test inventory and discover older fixtures
+- Distinguish status query failures; preserve out-of-space safety independently
+
+* Thu Oct 15 2026 Drive Manager contributors - 1.19.7-1
+- Fix write authorization and status binding; add confirmed account recovery
+- Reduce polling and unify isolated read snapshots; allow guarded test cleanup
+
+* Thu Oct 15 2026 Drive Manager contributors - 1.19.6-1
+- Generalize public acceptance docs; ignore invalid automount preferences
+
 * Thu Oct 15 2026 Drive Manager contributors - 1.19.5-1
 - Drain Qt deferred deletion in tests; isolate damaged preferences when mounting
 

@@ -1,11 +1,11 @@
 # Validation scope
 
-## Current delivery: 1.19.0
+## Current delivery: 1.19.8
 
-The application, source archive and Fedora 44 noarch RPM are prepared locally.
+The application, source archive and Fedora 44 noarch RPM are built with automated checks.
 Automated tests cover operation safety, account workflows, UI behavior, four
-language catalogs and private preferences. See the release notes for the final
-verified test count and download hashes.
+language catalogs and private preferences. The current suite contains 281 tests; see release notes for build evidence and
+download hashes.
 
 Qt tests run with the offscreen platform. Screenshots use synthetic accounts and
 quota/transfer data, not the user's cloud files. Language tests check immediate
@@ -58,7 +58,6 @@ password changes and two-factor behavior remain manual acceptance checks.
 
 Version 1.19.0 passes 221 automated tests. Real synthetic Rclone probes validate
 local-alias test-file readback, bandwidth arguments, browsing and private snapshot
-cleanup. A read-only check of the configured Proton account passed in about
-4.6 seconds, with original configuration bytes preserved. Other real providers
-and live cloud writing/FUSE reconnect scenarios are not claimed as passed.
+cleanup. Real cloud writing/FUSE reconnect scenarios require independent manual
+acceptance and are not claimed as passed by these synthetic probes.
 The new validation panel provides explicit controls and an owner-operated guide.

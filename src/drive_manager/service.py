@@ -31,6 +31,22 @@ class Manager:
         self.settings = Settings(self.home)
         self.accounts = Accounts(self.home)
 
+    def provider_types(self,names):
+        """One external metadata query per refresh, local accounts stay local."""
+        result={};external=[]
+        for name in names:
+            if self.is_app_account(name):result[name]=self.provider_of(name)
+            else:external.append(name)
+        if external:
+            import json
+            entries=json.loads(self.runner.run(['rclone','listremotes','--json']))
+            if not isinstance(entries,list):raise OperationError('Unsupported rclone metadata format')
+            for item in entries:
+                if isinstance(item,dict) and isinstance(item.get('name'),str):
+                    name=item['name'].removesuffix(':')
+                    if name in external:result[name]=item.get('type','')
+        return result
+
     def provider_of(self, remote):
         private=self.accounts.path(remote)
         if private.is_file():
@@ -211,11 +227,6 @@ class Manager:
             target = Path(prefs.mount_path)
             if target.exists() and (not target.is_dir() or any(target.iterdir())):
                 raise OperationError("Choose an empty folder")
-            # Check preferences before opening OAuth, without modifying account files.
-            for name in self.discover_accounts():
-                _, other = self.identity(name)
-                if target.is_relative_to(other) or other.is_relative_to(target):
-                    raise OperationError("Account mount folders must not overlap")
             if registration is None:
                 staged = (self.accounts.authorize(remote, cancel, on_url) if on_url is not None
                           else self.accounts.authorize(remote, cancel))
@@ -284,16 +295,20 @@ class Manager:
                 if (name in changed or other in changed) and (path.is_relative_to(target) or target.is_relative_to(path)):
                     raise OperationError('Mount paths of accounts must not overlap')
 
+    def unit_name(self,remote):
+        if not remote or any(c in remote for c in "\r\n:/\0") or remote.startswith('-'):
+            raise OperationError('Invalid connection name')
+        return 'drive-manager-'+sha256(remote.encode()).hexdigest()[:24]+'.service'
+
     def identity(self, remote):
-        if not remote or any(c in remote for c in "\r\n:/\0") or remote.startswith("-"):
-            raise OperationError("Invalid connection name")
-        key = sha256(remote.encode()).hexdigest()[:24]
+        unit=self.unit_name(remote)
+        key=unit.removeprefix('drive-manager-').removesuffix('.service')
         prefs = self.settings.load(remote)
         target = Path(prefs.mount_path) if prefs.mount_path else self.home / "DriveManager" / key
-        return f"drive-manager-{key}.service", target
+        return unit, target
 
     def properties(self, remote):
-        unit, _ = self.identity(remote)
+        unit = self.unit_name(remote)
         output = self.runner.run(["systemctl", "--user", "show", unit,
                                   "--property=ActiveState,Description,ExecStart", "--no-pager"])
         return dict(line.split("=", 1) for line in output.splitlines() if "=" in line)
@@ -308,7 +323,9 @@ class Manager:
                 and any(mode in command for mode in ("--vfs-cache-mode=off", "--vfs-cache-mode=full")))
 
     def status(self, remote):
-        _, target = self.identity(remote)
+        self.unit_name(remote)
+        try:_,target=self.identity(remote)
+        except OperationError:return Status('prefs_damaged','')
         matches = [m for m in self.mounts()
                    if m.path == str(target) or (m.kind.startswith("fuse") and m.source == remote + ":")]
         props = self.properties(remote)
@@ -321,12 +338,55 @@ class Manager:
             if own and self.rc_endpoint(remote).exists():
                 progress=transfers.progress(self.rc_endpoint(remote))
             if writable:
-                try: pending=transfers.pending(self.rc_endpoint(remote))
-                except transfers.TransferError: pending=-1
+                if progress is None or progress.out_of_space or progress.state in {'monitor_unknown','transfer_error'}:pending=-1
+                else:pending=progress.queued+progress.uploading+progress.errors
             return Status("mounted" if own else "external", matches[0].path, own, writable, pending, progress)
         if active in {"active", "activating", "deactivating", "reloading"}:
             return Status("starting" if self.owned(props) else "external", str(target))
         return Status("failed" if active == "failed" else "unmounted", str(target), False, self.settings.load(remote).writable)
+
+    def recover_mount(self,remote,confirmed=False):
+        if not confirmed:raise OperationError('recovery_confirm')
+        with self.lock():
+            _,target=self.identity(remote)
+            props=self.properties(remote)
+            if props.get('ActiveState') not in {'inactive','failed'}:raise OperationError('recovery_error')
+            matches=[m for m in self.mounts() if m.path==str(target)]
+            if len(matches)!=1 or matches[0].source!=remote+':' or matches[0].kind!='fuse.rclone':raise OperationError('recovery_error')
+            from .mounts import disconnected
+            if not disconnected(target):raise OperationError('recovery_error')
+            transfers.ensure_closed(target)
+            self.runner.run(['fusermount3','-u','--',str(target)])
+            return self.status(remote)
+
+    def repair_preferences(self,remote,confirmed=False):
+        """Quarantine only damaged preferences; never replace account credentials."""
+        if not confirmed:raise OperationError('recovery_confirm')
+        with self.lock():
+            self.unit_name(remote)
+            source=self.settings.path(remote)
+            if not source.is_file() or any(p.is_symlink() for p in [source,*source.parents]):raise OperationError('repair_error')
+            try:self.settings.load(remote)
+            except OperationError:pass
+            else:raise OperationError('repair_error')
+            if self.properties(remote).get('ActiveState') not in {'inactive','failed'}:raise OperationError('repair_error')
+            if any(m.kind.startswith('fuse') and (m.source==remote+':' or m.source.startswith(remote+'{')) for m in self.mounts()):raise OperationError('repair_error')
+            self.ensure_no_dirty_cache(remote)
+            from .settings import Preferences
+            self.validate_mount_targets([(remote,Preferences())],tolerate_corrupt=True)
+            folder=self.home/'.local/state/drive-manager/preference-backups'
+            if any(p.is_symlink() for p in [folder,*folder.parents]):raise OperationError('repair_error')
+            folder.mkdir(parents=True,exist_ok=True,mode=0o700);folder.chmod(0o700)
+            from uuid import uuid4
+            backup=folder/(source.stem+'-'+uuid4().hex+'.json.bak')
+            try:
+                os.replace(source,backup)
+                backup.chmod(0o600)
+                autostart.update(self.settings)
+            except Exception:
+                if backup.exists() and not source.exists():os.replace(backup,source)
+                raise OperationError('repair_error') from None
+            return self.discover_accounts()
 
     def lock(self):
         folder = self.home / ".local/state/drive-manager"
@@ -362,11 +422,11 @@ class Manager:
         return target
 
     def write_cache_path(self, remote):
-        unit, _=self.identity(remote)
+        unit=self.unit_name(remote)
         return self.home / '.cache/drive-manager-write-v1' / unit.removesuffix('.service')
 
     def rc_endpoint(self, remote):
-        unit, _=self.identity(remote)
+        unit=self.unit_name(remote)
         return self.home / '.local/state/drive-manager/rc' / (unit.removesuffix('.service')+'.sock')
 
     def ensure_no_dirty_cache(self, remote):

@@ -1,6 +1,8 @@
-"""KDE login launcher. No enabling linger or replacing foreign services."""
+"""Desktop login launcher. No enabling linger or replacing foreign services."""
 from pathlib import Path
 import os
+import json
+from .settings import Preferences
 import tempfile
 from .process import Runner, OperationError
 
@@ -9,8 +11,15 @@ MARKER = '# Managed by Drive Manager v1'
 def update(settings):
     folder = settings.home / '.config/autostart'
     target = folder / 'drive-manager-automount.desktop'
-    enabled = any(__import__('json').loads(p.read_text()).get('automount', False)
-                  for p in settings.folder.glob('*.json'))
+    enabled = False
+    for path in settings.folder.glob('*.json'):
+        try:
+            if path.is_symlink():continue
+            prefs = settings.validate(Preferences(**json.loads(path.read_text())))
+        except (OSError, ValueError, TypeError, OperationError):
+            # Damaged preferences are preserved and never enable login mounting.
+            continue
+        enabled = enabled or prefs.automount
     if folder.is_symlink() or target.is_symlink(): raise OperationError('Invalid login launcher')
     if target.exists() and MARKER not in target.read_text():
         raise OperationError('Existing login launcher is not managed by Drive Manager')

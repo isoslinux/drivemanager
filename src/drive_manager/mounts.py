@@ -20,3 +20,12 @@ def read_mounts(path=Path("/proc/self/mountinfo")):
         if sep and len(left) >= 5 and len(right) >= 2:
             mounts.append(Mount(unescape(left[4]), unescape(right[1]), right[0]))
     return mounts
+
+def disconnected(path):
+    """Probe ENOTCONN in a bounded child; never traverse a stalled FUSE in UI."""
+    import subprocess,sys
+    code='import os,sys,errno\ntry: os.stat(sys.argv[1])\nexcept OSError as e: sys.exit(3 if e.errno==errno.ENOTCONN else 2)\nsys.exit(0)'
+    try:
+        result=subprocess.run([sys.executable,'-c',code,str(path)],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=3,start_new_session=True)
+        return result.returncode==3
+    except (OSError,subprocess.TimeoutExpired):return False

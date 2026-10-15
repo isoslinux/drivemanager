@@ -23,7 +23,9 @@ class MountIdentityTests(unittest.TestCase):
                 source=next(a.split('=',1)[1] for a in command if a.startswith('--devname='))
                 _,target=manager.identity('cloud');mounted.append(Mount(str(target),source,'fuse.rclone'))
                 runner.props='ActiveState=active\nDescription=Drive Manager read-write mount v1\nExecStart='+' '.join(command)+'\n'
-                with patch('drive_manager.transfers.pending',return_value=2) as pending:
+                manager.rc_endpoint("cloud").touch()
+                from drive_manager.transfers import Progress
+                with patch('drive_manager.transfers.progress',return_value=Progress('queued',queued=2)) as pending:
                     status=manager.status('cloud')
                 self.assertEqual(status.state,'mounted');self.assertTrue(status.managed)
                 self.assertTrue(status.writable);self.assertEqual(status.pending,2)

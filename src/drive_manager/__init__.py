@@ -1,2 +1,2 @@
-"""Drive Manager: safe read-only MVP."""
-__version__ = "1.19.5"
+"""Drive Manager: guarded multi-account cloud mounts and transfers."""
+__version__ = "1.19.8"

@@ -2,10 +2,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 import json
-import os
-import shutil
 import subprocess
-import tempfile
 from .wallet import clean_env
 
 @dataclass(frozen=True)
@@ -69,14 +66,8 @@ def read_quota(manager, remote):
                 if response.status != 200: return Quota()
                 return parse(json.loads(response.read(65536)))
             finally: connection.close()
-        folder = manager.home/'.local/state/drive-manager/quota'
-        if any(parent.is_symlink() for parent in [folder,*folder.parents]): return Quota()
-        folder.mkdir(parents=True,exist_ok=True,mode=0o700);folder.chmod(0o700)
-        with tempfile.TemporaryDirectory(dir=folder,prefix='.query-') as temporary:
-            config = Path(temporary)/'rclone.conf'
-            with config.open('xb') as file:
-                os.fchmod(file.fileno(),0o600)
-                with source.open('rb') as original: shutil.copyfileobj(original,file)
+        from .connectivity import private_snapshot
+        with private_snapshot(manager,remote,folder_name='quota',prefix='.query-') as (config,_):
             return parse(run(['rclone','about',remote+':','--json','--config='+str(config),
                               '--contimeout=5s','--timeout=8s','--retries=1','--low-level-retries=1','--log-level=ERROR']))
     except Exception:

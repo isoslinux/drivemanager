@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
     QSpinBox, QDialogButtonBox, QFileDialog, QHBoxLayout, QCheckBox, QInputDialog, QProgressBar, QPlainTextEdit, QToolButton, QTableWidget, QTableWidgetItem, QAbstractItemView)
 from .process import Runner, OperationError
 from .remotes import discover
-from .service import Manager
+from .service import Manager, Status
 from .settings import Preferences
 from queue import Queue, Empty
 from .accounts import AuthorizationError
@@ -88,7 +88,7 @@ class Window(BulkActions,QMainWindow):
         self.tools_button=QToolButton();self.tools_button.setText(self.t['tools'])
         tools_menu=QMenu(self)
         self.tools_actions={}
-        for key,callback in [('setup_guide',self.setup_guide),('browse_measure',self.browse_measure),('validate_all',self.validation_panel),('export_settings',self.export_settings),('import_settings',self.import_settings)]:
+        for key,callback in [('recover_mount',self.recover_selected_mount),('repair_preferences',self.repair_selected_preferences),('setup_guide',self.setup_guide),('browse_measure',self.browse_measure),('validate_all',self.validation_panel),('export_settings',self.export_settings),('import_settings',self.import_settings)]:
             action=QAction(self.t[key],self);action.triggered.connect(callback);tools_menu.addAction(action);self.tools_actions[key]=action
         self.tools_button.setMenu(tools_menu);self.tools_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         toolbar.addWidget(self.tools_button)
@@ -376,7 +376,7 @@ class Window(BulkActions,QMainWindow):
                 self.tray.setToolTip(self.t['error'])
                 self.buttons['mount'].setEnabled(bool(self.accounts.currentText()))
         self.poll_ticks += 1
-        if self.poll_ticks >= 8:
+        if self.poll_ticks >= 20:
             self.poll_ticks = 0; self.poll()
 
     def check_updates(self):
@@ -578,7 +578,14 @@ class Window(BulkActions,QMainWindow):
         remote = self.accounts.currentText()
         if remote:
             names=[self.accounts.item(row,0).text() for row in range(self.accounts.rowCount())]
-            self.submit(lambda:[(name,self.manager.provider_of(name),self.manager.status(name)) for name in names],self.show_accounts,quiet=True)
+            def collect():
+                providers=self.manager.provider_types(names)
+                rows=[]
+                for name in names:
+                    try:rows.append((name,providers.get(name,''),self.manager.status(name)))
+                    except OperationError:rows.append((name,providers.get(name,''),Status('status_unavailable','')))
+                return rows
+            self.submit(collect,self.show_accounts,quiet=True)
 
     def show_accounts(self, rows):
         labels={provider.key:provider.label for provider in PROVIDERS}
@@ -590,8 +597,11 @@ class Window(BulkActions,QMainWindow):
                 self.t[status.progress.state] if status.progress is not None else self.t['mounted_rw' if status.writable and status.state=='mounted' else status.state])
             if name==self.accounts.currentText():self.show_status(status)
 
-    def show_status(self, status):
-        self.account_states[self.accounts.currentText()] = status
+    def show_status(self, status, remote=None):
+        remote = remote or self.accounts.currentText()
+        if not remote:return
+        self.account_states[remote] = status
+        if remote != self.accounts.currentText():return
         self.account_menu_button.setEnabled(bool(self.accounts.currentText()))
         self.accounts.update_account(self.accounts.currentText(), self.accounts.item(self.accounts.currentRow(),1).text(),
             status.path, '—' if status.state=='external' else self.t['mode_rw' if status.writable else 'mode_ro'], self.t[status.progress.state] if status.progress is not None else self.t['mounted_rw' if status.writable and status.state=='mounted' else status.state])
@@ -634,6 +644,7 @@ class Window(BulkActions,QMainWindow):
         if status.managed and detail is not None:
             sync='\n'+self.t[detail.state]+f" · {self.t['queued_label']}: {detail.queued} · {self.t['uploading_label']}: {detail.uploading}"
         elif status.managed: sync='\n'+self.t['unmonitored']
+        if status.managed and status.pending<0:sync+='\n'+self.t['sync_unknown']
         return title + ' · ' + self.t[origin] + '\n' + status.path + sync
 
     def edit_settings(self):
@@ -688,14 +699,14 @@ class Window(BulkActions,QMainWindow):
                 raise
         def saved(status):
             if status is not None:
-                self.show_status(status)
+                self.show_status(status,remote)
                 return
             if QMessageBox.question(self, self.t['reauth'], self.t['upgrade_confirm'],
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
                 self.poll()
                 return
-                cancel = Event(); self.oauth_cancel = cancel
+            cancel = Event(); self.oauth_cancel = cancel
             self.browser_url = None
             while not self.oauth_urls.empty(): self.oauth_urls.get_nowait()
             self.label.setText(self.t['auth_wait'])
@@ -705,7 +716,7 @@ class Window(BulkActions,QMainWindow):
                 # Mode remains read-only until all preference checks succeed.
                 if cancel.is_set(): raise OperationError('reauth_error')
                 return self.manager.save_preferences(remote, prefs)
-            self.submit(authorize_and_save, self.show_status, 'reauth_error')
+            self.submit(authorize_and_save, lambda status:self.show_status(status,remote), 'reauth_error')
         self.submit(save, saved, 'prefs_error')
 
     def ask_internxt_code(self, cancel):
@@ -876,7 +887,7 @@ class Window(BulkActions,QMainWindow):
 
     def mount(self):
         remote = self.accounts.currentText()
-        self.submit(lambda: self.manager.mount(remote), self.show_status)
+        self.submit(lambda: self.manager.mount(remote), lambda status:self.show_status(status,remote))
 
     def unmount(self):
         remote = self.accounts.currentText()
@@ -891,7 +902,7 @@ class Window(BulkActions,QMainWindow):
         finally: self.timer.start(250)
         if accepted:
             disable = option.isChecked()
-            self.submit(lambda: self.manager.disconnect(remote, confirmed=True, disable_automount=disable), self.show_status)
+            self.submit(lambda: self.manager.disconnect(remote, confirmed=True, disable_automount=disable), lambda status:self.show_status(status,remote))
 
     def delete_connection(self):
         remote = self.accounts.currentText()
@@ -909,7 +920,7 @@ class Window(BulkActions,QMainWindow):
 
     def open_folder(self):
         remote = self.accounts.currentText()
-        self.submit(lambda: (self.manager.open_folder(remote), self.manager.status(remote))[1], self.show_status)
+        self.submit(lambda: (self.manager.open_folder(remote), self.manager.status(remote))[1], lambda status:self.show_status(status,remote))
 
     def closeEvent(self, event):
         if self.tray.isVisible():

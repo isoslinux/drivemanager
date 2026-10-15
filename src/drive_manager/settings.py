@@ -73,6 +73,8 @@ class Settings:
                 if other != target:
                     try: data = json.loads(other.read_text())
                     except (OSError, ValueError): raise OperationError('Cannot validate other accounts') from None
+                    if not isinstance(data,dict):raise OperationError('Cannot validate other account preferences')
+                    if not isinstance(data.get('mount_path',''),str):raise OperationError('Cannot validate other account preferences')
                     other_path = data.get('mount_path', '') or str(self.home/'DriveManager'/other.stem)
                     if other_path and (Path(other_path).is_relative_to(effective)
                                        or effective.is_relative_to(Path(other_path))):

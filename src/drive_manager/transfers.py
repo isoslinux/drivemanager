@@ -5,6 +5,8 @@ from pathlib import Path
 import subprocess
 from .process import OperationError
 from .internxt import UnixConnection
+from dataclasses import dataclass
+import math
 
 class TransferError(OperationError):
     pass
@@ -54,8 +56,6 @@ def ensure_closed(path):
     except TransferError:raise
     except Exception:raise TransferError('uploads_unknown') from None
 
-from dataclasses import dataclass
-import math
 
 @dataclass(frozen=True)
 class Transfer:
@@ -72,6 +72,7 @@ class Progress:
     errors: int = 0
     speed: float = 0
     files: tuple = ()
+    out_of_space: bool = False
 
 def number(value):
     return isinstance(value,(int,float)) and not isinstance(value,bool) and math.isfinite(value) and value>=0
@@ -101,6 +102,6 @@ def progress(endpoint):
             elif any(word in message for word in ('no such host','network is unreachable','timeout','connection refused','dial tcp')):state='network_retry'
             else:state='transfer_error'
         speed=core.get('speed',0)
-        return Progress(state,queued,uploading,errors,speed if number(speed) else 0,tuple(files[:50]))
+        return Progress(state,queued,uploading,errors,speed if number(speed) else 0,tuple(files[:50]),cache['outOfSpace'])
     except Exception:
         return Progress('monitor_unknown')

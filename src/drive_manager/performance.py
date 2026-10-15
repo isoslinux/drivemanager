@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import shutil
 from .transfers import dirty_files
+import os,signal,subprocess,sys,time
 
 @dataclass(frozen=True)
 class CacheHealth:
@@ -28,7 +29,6 @@ def inspect(manager,remote):
 def slow(result):
     return result.state=='connection_ok' and result.seconds>=5
 
-import os,signal,subprocess,sys,time
 
 @dataclass(frozen=True)
 class BrowseTiming:

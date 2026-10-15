@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (QDialog,QVBoxLayout,QHBoxLayout,QLabel,QPushButto
 from .providers import PROVIDERS
 from .performance import CacheHealth,inspect,slow
 from .quota import size
+from .process import OperationError
 
 class BulkActions:
     def request_health(self,force=False):
@@ -102,8 +103,11 @@ class BulkActions:
         self.validation_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers);layout.addWidget(self.validation_table)
         self.validation_message=QLabel();self.validation_message.setWordWrap(True);layout.addWidget(self.validation_message)
         self.validation_selector=QComboBox();self.validation_selector.addItems([self.accounts.item(row,0).text() for row in range(self.accounts.rowCount())]);layout.addWidget(self.validation_selector)
+        self.validation_test_selector=QComboBox();layout.addWidget(self.validation_test_selector)
+        self.validation_selector.currentTextChanged.connect(self.refresh_test_files)
+        self.refresh_test_files()
         controls=QHBoxLayout();self.validation_controls=[];self.validation_buttons={}
-        for key,kind in [('validate_all','read'),('validation_write','write'),('validation_reconnect','reconnect')]:
+        for key,kind in [('validate_all','read'),('validation_write','write'),('validation_reconnect','reconnect'),('validation_cleanup','cleanup'),('validation_discover','discover')]:
             button=QPushButton(self.t[key]);button.clicked.connect(lambda checked=False,kind=kind:self.start_validation(kind));controls.addWidget(button);self.validation_controls.append(button);self.validation_buttons[key]=button
         cancel=QPushButton(self.t['operation_cancel']);self.validation_buttons['operation_cancel']=cancel;cancel.clicked.connect(self.cancel_validation);controls.addWidget(cancel);layout.addLayout(controls)
         guide=QPushButton(self.t['validation_guide']);self.validation_buttons['validation_guide']=guide;guide.clicked.connect(self.acceptance_guide);layout.addWidget(guide)
@@ -129,6 +133,7 @@ class BulkActions:
         self.validation_table.resizeRowsToContents()
         for button in self.validation_controls:button.setEnabled(self.validation_future is None)
         self.validation_selector.setEnabled(self.validation_future is None)
+        self.validation_test_selector.setEnabled(self.validation_future is None)
         self.validation_buttons['operation_cancel'].setEnabled(self.validation_future is not None and not self.validation_cancel.is_set())
 
     def cancel_validation(self):
@@ -138,18 +143,24 @@ class BulkActions:
 
     def start_validation(self,kind):
         if self.validation_future is not None:return
-        from .validation import read_all,write_test,reconnect
+        from .validation import read_all,write_test,reconnect,cleanup_test,discover_test_files
         remote=self.validation_selector.currentText()
-        if kind!='read':
+        if kind=='discover' and not remote:return
+        if kind not in {'read','discover'}:
             if not remote:return
-            message=self.t['validation_write_confirm' if kind=='write' else 'validation_reconnect_confirm']+'\n'+remote
+            message=self.t['validation_cleanup_confirm' if kind=='cleanup' else 'validation_write_confirm' if kind=='write' else 'validation_reconnect_confirm']+'\n'+remote+('\n'+self.validation_test_selector.currentText() if kind=='cleanup' else '')
             if QMessageBox.question(self,self.t['validate_all'],message,QMessageBox.StandardButton.Yes|QMessageBox.StandardButton.No,QMessageBox.StandardButton.No)!=QMessageBox.StandardButton.Yes:return
+        filename=self.validation_test_selector.currentText()
+        if kind=='cleanup' and not filename:
+            self.validation_message.setText(self.t['validation_cleanup_missing']);return
         self.validation_cancel=Event();self.validation_kind=kind;self.validation_remote=remote
         from .activity import Activity
-        stage={'read':'connection_checking','write':'validation_write','reconnect':'validation_reconnect'}[kind]
+        stage={'read':'connection_checking','write':'validation_write','reconnect':'validation_reconnect','cleanup':'validation_cleanup','discover':'validation_discover'}[kind]
         self.validation_activity=Activity(self,'validate_all',remote if kind!='read' else '',self.validation_cancel,stage)
         if kind=='read':self.validation_future=self.validation_pool.submit(read_all,self.manager,self.validation_cancel,self.validation_queue.put,self.validation_activity.report)
         elif kind=='write':self.validation_future=self.validation_pool.submit(write_test,self.manager,remote,self.validation_cancel,True)
+        elif kind=='cleanup':self.validation_future=self.validation_pool.submit(cleanup_test,self.manager,remote,filename,True,self.validation_cancel)
+        elif kind=='discover':self.validation_future=self.validation_pool.submit(discover_test_files,self.manager,remote,self.validation_cancel)
         else:self.validation_future=self.validation_pool.submit(reconnect,self.manager,remote,True,self.validation_cancel)
         self.validation_message.setText(self.t['connection_checking']);self.render_validation()
 
@@ -166,11 +177,11 @@ class BulkActions:
         try:
             result=future.result()
             if self.validation_kind=='read':key='connection_cancelled' if self.validation_cancel.is_set() else 'validation_finished'
-            elif self.validation_kind=='write':key=result.state
+            elif self.validation_kind in {'write','cleanup','discover'}:key=result.state
             else:key='validation_reconnect_ok' if result.state=='mounted' and result.managed else ('connection_cancelled' if self.validation_cancel.is_set() else 'validation_error')
             if self.validation_dialog is not None:
                 if self.validation_kind=='read':message=self.t['validation_finished']
-                elif self.validation_kind=='write':message=self.t[result.state]+('\n'+self.t['validation_file']+': '+result.file if result.file else '')
+                elif self.validation_kind in {'write','cleanup','discover'}:message=self.t[result.state]+('\n'+self.t['validation_file']+': '+result.file if result.file else '')
                 else:message=self.t[key]
                 self.validation_message.setText(message)
         except Exception:
@@ -178,6 +189,7 @@ class BulkActions:
             if self.validation_dialog is not None:self.validation_message.setText(self.t[key])
         self.validation_activity.complete(key)
         if self.validation_dialog is not None and self.validation_kind=='read' and self.validation_cancel.is_set():self.validation_message.setText(self.t[key])
+        if self.validation_dialog is not None:self.refresh_test_files()
         self.render_validation()
 
     def acceptance_guide(self):
@@ -219,3 +231,23 @@ class BulkActions:
         from .performance import browsing_advice
         advice=self.t[browsing_advice(result)]
         QMessageBox.information(self,self.t['browse_measure'],text+'\n\n'+advice+'\n\n'+self.t['browse_scope'])
+
+    def recover_selected_mount(self):
+        remote=self.accounts.currentText()
+        if not remote:return
+        if QMessageBox.question(self,self.t['recover_mount'],self.t['recover_mount_confirm']+'\n'+remote,QMessageBox.StandardButton.Yes|QMessageBox.StandardButton.No,QMessageBox.StandardButton.No)!=QMessageBox.StandardButton.Yes:return
+        self.submit(lambda:self.manager.recover_mount(remote,True),lambda status:self.show_status(status,remote),'recovery_error')
+
+    def repair_selected_preferences(self):
+        remote=self.accounts.currentText()
+        if not remote:return
+        if QMessageBox.question(self,self.t['repair_preferences'],self.t['repair_preferences_confirm']+'\n'+remote,QMessageBox.StandardButton.Yes|QMessageBox.StandardButton.No,QMessageBox.StandardButton.No)!=QMessageBox.StandardButton.Yes:return
+        self.submit(lambda:self.manager.repair_preferences(remote,True),self.set_accounts,'repair_error')
+
+    def refresh_test_files(self):
+        from .test_files import read
+        remote=self.validation_selector.currentText()
+        self.validation_test_selector.clear()
+        if not remote:return
+        try:self.validation_test_selector.addItems(read(self.manager,remote))
+        except OperationError:self.validation_message.setText(self.t['validation_error'])

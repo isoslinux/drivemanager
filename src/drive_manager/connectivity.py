@@ -9,6 +9,8 @@ import subprocess
 import tempfile
 import time
 from .wallet import PASSWORD_COMMAND, clean_env
+from contextlib import contextmanager
+from .process import OperationError
 
 @dataclass(frozen=True)
 class Result:
@@ -68,39 +70,21 @@ def probe(args, cancel=None, limit=20):
 
 
 def check(manager, remote, cancel=None):
-    """Read access only; never mount, change preferences, or update source secrets."""
+    """Read access only, with one shared isolated configuration implementation."""
     try:
-        manager.identity(remote)
-        if cancel is not None and cancel.is_set(): return Result('connection_cancelled')
-        own=manager.is_app_account(remote)
-        source=manager.accounts.path(remote)
-        if not own:
-            lines=manager.runner.run(['rclone','config','file']).strip().splitlines()
-            if not lines:return Result('connection_error')
-            source=Path(lines[-1])
-        if not source.is_absolute() or source.is_symlink() or not source.is_file():return Result('connection_error')
-        encrypted=manager.accounts.encrypted(source)
-        if encrypted and not own:return Result('connection_locked')
-        folder=manager.home/'.local/state/drive-manager/connectivity'
-        if any(p.is_symlink() for p in [folder,*folder.parents]):return Result('connection_error')
-        folder.mkdir(parents=True,exist_ok=True,mode=0o700);folder.chmod(0o700)
-        with tempfile.TemporaryDirectory(dir=folder,prefix='.check-') as temporary:
-            config=Path(temporary)/'rclone.conf'
-            with config.open('xb') as copy:
-                os.fchmod(copy.fileno(),0o600)
-                with source.open('rb') as original:shutil.copyfileobj(original,copy)
+        if cancel is not None and cancel.is_set():return Result('connection_cancelled')
+        with private_snapshot(manager,remote) as (config,encrypted):
             args=['rclone','lsf',remote+':','--dirs-only','--max-depth=1','--config='+str(config),
                   '--contimeout=5s','--timeout=10s','--retries=1','--low-level-retries=1','--log-level=ERROR']
             if encrypted:args.append('--password-command='+PASSWORD_COMMAND)
             return probe(args,cancel)
-    except Exception:
-        return Result('connection_error')
+    except OperationError as error:
+        return Result('connection_locked' if str(error)=='connection_locked' else 'connection_error')
+    except Exception:return Result('connection_error')
 
-from contextlib import contextmanager
-from .process import OperationError
 
 @contextmanager
-def private_snapshot(manager,remote):
+def private_snapshot(manager,remote,folder_name="connectivity",prefix=".check-"):
     """Reusable isolated config for explicit readback of a disposable test file."""
     manager.identity(remote);own=manager.is_app_account(remote);source=manager.accounts.path(remote)
     if not own:
@@ -110,10 +94,11 @@ def private_snapshot(manager,remote):
     if not source.is_absolute() or source.is_symlink() or not source.is_file():raise OperationError('connection_error')
     encrypted=manager.accounts.encrypted(source)
     if encrypted and not own:raise OperationError('connection_locked')
-    folder=manager.home/'.local/state/drive-manager/connectivity'
+    if folder_name not in {'connectivity','quota'}:raise OperationError('connection_error')
+    folder=manager.home/'.local/state/drive-manager'/folder_name
     if any(p.is_symlink() for p in [folder,*folder.parents]):raise OperationError('connection_error')
     folder.mkdir(parents=True,exist_ok=True,mode=0o700);folder.chmod(0o700)
-    with tempfile.TemporaryDirectory(dir=folder,prefix='.check-') as temporary:
+    with tempfile.TemporaryDirectory(dir=folder,prefix=prefix) as temporary:
         config=Path(temporary)/'rclone.conf'
         with config.open('xb') as copy:
             os.fchmod(copy.fileno(),0o600)

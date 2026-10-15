@@ -52,13 +52,13 @@ class UiRegressionTests(TestCase):
         self.assertFalse(isValid(second));owner.close()
     def test_reconnect_cancel_panel_and_activity_agree(self):
         future=Future();future.set_result(Status('starting','',True));cancel=Event();cancel.set()
-        owner=SimpleNamespace(validation_queue=Queue(),validation_future=future,validation_cancel=cancel,validation_kind='reconnect',validation_dialog=object(),validation_message=Mock(),validation_activity=Mock(),render_validation=Mock(),t=TEXT['es'])
+        owner=SimpleNamespace(validation_queue=Queue(),validation_future=future,validation_cancel=cancel,validation_kind='reconnect',validation_dialog=object(),validation_message=Mock(),validation_activity=Mock(),render_validation=Mock(),refresh_test_files=Mock(),t=TEXT['es'])
         BulkActions.tick_validation(owner)
         owner.validation_activity.complete.assert_called_once_with('connection_cancelled')
         owner.validation_message.setText.assert_called_once_with(TEXT['es']['connection_cancelled'])
     def test_reconnect_cancel_exception_panel_and_activity_agree(self):
         future=Future();future.set_exception(OperationError('connection_cancelled'));cancel=Event();cancel.set()
-        owner=SimpleNamespace(validation_queue=Queue(),validation_future=future,validation_cancel=cancel,validation_kind='reconnect',validation_dialog=object(),validation_message=Mock(),validation_activity=Mock(),render_validation=Mock(),t=TEXT['es'])
+        owner=SimpleNamespace(validation_queue=Queue(),validation_future=future,validation_cancel=cancel,validation_kind='reconnect',validation_dialog=object(),validation_message=Mock(),validation_activity=Mock(),render_validation=Mock(),refresh_test_files=Mock(),t=TEXT['es'])
         BulkActions.tick_validation(owner)
         owner.validation_activity.complete.assert_called_once_with('connection_cancelled')
         owner.validation_message.setText.assert_called_once_with(TEXT['es']['connection_cancelled'])
