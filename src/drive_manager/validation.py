@@ -75,7 +75,7 @@ def remote_bytes(manager,remote,name,cancel):
 
 def write_test(manager,remote,cancel,confirmed=False):
     if not confirmed:return WriteResult('validation_confirm')
-    start=time.monotonic();name=''
+    start=time.monotonic();name='';created=False
     try:
         with manager.lock():
             if cancel.is_set():return WriteResult('connection_cancelled')
@@ -87,6 +87,7 @@ def write_test(manager,remote,cancel,confirmed=False):
             payload=('Drive Manager disposable acceptance test\n'+name+'\n').encode()
             target=Path(status.path)/name
             fd=os.open(target,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+            created=True
             with os.fdopen(fd,'wb') as file:file.write(payload);file.flush();os.fsync(file.fileno())
             deadline=time.monotonic()+60
             while time.monotonic()<deadline and not cancel.is_set():
@@ -95,9 +96,15 @@ def write_test(manager,remote,cancel,confirmed=False):
                         return WriteResult('validation_write_ok',name,time.monotonic()-start)
                 cancel.wait(1)
             return WriteResult('connection_cancelled' if cancel.is_set() else 'validation_timeout',name,time.monotonic()-start)
+    except FileNotFoundError:
+        removed=False
+        if name and not created:
+            try:test_files.remove(manager,remote,name);removed=True
+            except Exception:pass
+        return WriteResult('validation_error','' if removed else name,time.monotonic()-start)
     except Exception:return WriteResult('validation_error',name,time.monotonic()-start)
 
-def bounded_output(args,cancel,limit=10,max_bytes=131072):
+def bounded_output(args,cancel,limit=10,max_bytes=131072,allow_missing=False):
     """Bounded disposable child, including a bounded reap after killing it."""
     if cancel.is_set():return 'connection_cancelled',None
     process=None;started=time.monotonic()
@@ -119,6 +126,7 @@ def bounded_output(args,cancel,limit=10,max_bytes=131072):
                     if not part:break
                     output.extend(part)
                     if len(output)>max_bytes:return 'validation_error',None
+                if allow_missing and process.returncode==4:return 'validation_cleanup_absent',None
                 return ('operation_finished',bytes(output)) if process.returncode==0 else ('validation_error',None)
             if time.monotonic()-started>=limit:return 'validation_timeout',None
             cancel.wait(.05)
@@ -146,17 +154,26 @@ def cleanup_test(manager,remote,name,confirmed=False,cancel=None):
             manager.ensure_no_dirty_cache(remote)
             folder=status.path
         worker=str(Path(__file__).with_name('cleanup_probe.py'))
-        state,output=bounded_output([sys.executable,worker,folder,name,'verify'],cancel)
-        if output is None:return WriteResult(state,name)
+        state,output=bounded_output([sys.executable,'-I',worker,folder,name,'verify'],cancel,allow_missing=True)
+        if output is None:
+            if state=='validation_cleanup_absent':
+                with manager.lock():
+                    if cancel.is_set():return WriteResult('connection_cancelled',name)
+                    current=manager.status(remote)
+                    if current.path!=folder or not current.managed or not current.writable or current.pending!=0:return WriteResult('validation_write_requires',name)
+                    manager.ensure_no_dirty_cache(remote)
+                    test_files.remove(manager,remote,name)
+            return WriteResult(state,name)
         identity=json.loads(output)
         with manager.lock():
             if cancel.is_set():return WriteResult('connection_cancelled',name)
             current=manager.status(remote)
             if current.path!=folder or not current.managed or not current.writable or current.pending!=0:return WriteResult('validation_write_requires',name)
             manager.ensure_no_dirty_cache(remote)
-            state,output=bounded_output([sys.executable,worker,folder,name,'delete',json.dumps(identity)],cancel)
-            if output is None:return WriteResult(state,name)
+            state,output=bounded_output([sys.executable,'-I',worker,folder,name,'delete',json.dumps(identity)],cancel,allow_missing=True)
+            if output is None and state!='validation_cleanup_absent':return WriteResult(state,name)
             test_files.remove(manager,remote,name)
+            if state=='validation_cleanup_absent':return WriteResult(state,name)
         return WriteResult('validation_cleanup_requested',name)
     except Exception:return WriteResult('validation_error',name)
 

@@ -132,3 +132,5 @@ MESSAGES.update({'validation_cleanup': 'Supprimer le fichier de test', 'validati
 MESSAGES.update({'status_unavailable': 'État du compte indisponible', 'validation_discover': 'Rechercher les anciens tests', 'validation_discovered': 'Fichiers candidats enregistrés depuis la racine. Sélectionnez un fichier ; la suppression exige un contenu de test intact.', 'validation_cleanup_missing': 'Aucun fichier de test enregistré. Recherchez les anciens tests.'})
 
 MESSAGES.update({'recover_mount_confirm': 'Détacher seulement le FUSE déconnecté de ce compte ? Services actifs, chemins étrangers ou sains et fichiers ouverts empêchent la récupération. Le cache en attente est préservé pour le prochain montage inscriptible. Aucun démontage forcé ou différé.', 'validation_cleanup_confirm': 'Supprimer le fichier de test sélectionné ? Seul le contenu intact sur un montage géré inscriptible est accepté. Les envois en attente empêchent la suppression. Opération annulable et limitée dans le temps ; surveillez la fin dans le cloud.'})
+
+MESSAGES['validation_cleanup_absent']='Fichier absent du montage ; entrée retirée de la liste. Absence dans le cloud non vérifiée indépendamment.'

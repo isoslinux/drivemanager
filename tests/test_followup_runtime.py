@@ -62,7 +62,7 @@ class RuntimeFollowupTests(TestCase):
         child.assert_not_called()
     def test_cleanup_verify_phase_does_not_hold_global_lock(self):
         name='DriveManager-test-'+('a'*32)+'.txt';status=Status('mounted',str(self.home/'Drives/a'),True,True,0)
-        def probe(args,event):
+        def probe(args,event,**kwargs):
             with self.manager.lock():pass
             return 'validation_timeout',None
         with patch.object(self.manager,'status',return_value=status),patch('drive_manager.validation.bounded_output',side_effect=probe):

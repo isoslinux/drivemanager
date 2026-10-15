@@ -135,3 +135,5 @@ MESSAGES.update({'validation_cleanup': 'Testdatei entfernen', 'validation_cleanu
 MESSAGES.update({'status_unavailable': 'Kontostatus nicht verfügbar', 'validation_discover': 'Frühere Testdateien suchen', 'validation_discovered': 'Kandidaten im Stammordner gespeichert. Datei auswählen; nur unveränderte Testinhalte können gelöscht werden.', 'validation_cleanup_missing': 'Keine Testdatei gespeichert. Frühere Testdateien suchen.'})
 
 MESSAGES.update({'recover_mount_confirm': 'Nur den getrennten FUSE-Mount dieses Kontos lösen? Aktive Dienste, fremde oder intakte Pfade und offene Dateien verhindern dies. Ausstehender Cache bleibt für den nächsten beschreibbaren Mount erhalten. Kein erzwungenes oder verzögertes Aushängen.', 'validation_cleanup_confirm': 'Ausgewählte Testdatei löschen? Nur unveränderte Testinhalte auf einem verwalteten beschreibbaren Mount. Ausstehende Uploads verhindern dies. Abbruch und Zeitlimit sind verfügbar; Cloudabschluss weiterhin überwachen.'})
+
+MESSAGES['validation_cleanup_absent']='Datei im Mount nicht vorhanden; Listeneintrag entfernt. Cloudabwesenheit nicht unabhängig geprüft.'

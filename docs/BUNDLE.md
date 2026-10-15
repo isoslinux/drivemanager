@@ -329,3 +329,17 @@ cache space always makes pending uploads unknown, never falsely clean.
 Eleven new regression tests cover dirty-cache preservation, disk-full combinations,
 query labeling, persisted multi-file records, discovery, cancellation/timeouts,
 verification outside the lock and deletion of one selected fixture.
+
+## 1.19.9: absent records and isolated cleanup workers
+
+An ENOENT fixture-creation failure before the file is opened removes the attempted
+name from the private registry. The bounded cleanup worker has a distinct return
+code for FileNotFoundError. After revalidating the account/mount, cleanup can
+retire an absent entry without claiming cloud deletion or independently verified
+cloud absence. Cancellation, timeouts, permissions and other errors do not imply
+absence and preserve the entry. Cleanup children use Python -I for verification
+and deletion, excluding the package directory and environment import paths.
+
+Four regression tests cover creation ENOENT, absent-file cleanup, both isolated
+worker commands and retaining entries on timeout. Ignored __pycache__ folders
+are excluded from source export and release packaging.

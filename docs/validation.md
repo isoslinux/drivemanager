@@ -1,10 +1,10 @@
 # Validation scope
 
-## Current delivery: 1.19.8
+## Current delivery: 1.19.9
 
 The application, source archive and Fedora 44 noarch RPM are built with automated checks.
 Automated tests cover operation safety, account workflows, UI behavior, four
-language catalogs and private preferences. The current suite contains 281 tests; see release notes for build evidence and
+language catalogs and private preferences. The current suite contains 285 tests; see release notes for build evidence and
 download hashes.
 
 Qt tests run with the offscreen platform. Screenshots use synthetic accounts and

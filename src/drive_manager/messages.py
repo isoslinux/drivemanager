@@ -348,3 +348,7 @@ TEXT['es'].update({'status_unavailable': 'No se pudo consultar el estado de la c
 TEXT['en'].update({'recover_mount_confirm': 'Detach only a disconnected FUSE mount for this account? Active services, healthy/foreign paths and open files prevent recovery. Pending cache is preserved for the next writable mount. No forced or lazy unmount is used.', 'validation_cleanup_confirm': 'Select a recorded test file for this account? Only unchanged disposable test content on a managed writable mount is accepted. Pending uploads prevent deletion. The operation can be cancelled and is bounded; cloud completion still needs monitoring.'})
 
 TEXT['es'].update({'recover_mount_confirm': '¿Desmontar solo un FUSE desconectado de esta cuenta? Servicios activos, rutas ajenas o sanas y archivos abiertos impiden recuperarlo. La caché pendiente se conserva para el próximo montaje con escritura. No se usa desmontaje forzado ni diferido.', 'validation_cleanup_confirm': '¿Eliminar el archivo de prueba seleccionado para esta cuenta? Solo se acepta contenido de prueba intacto en un montaje propio con escritura. Las subidas pendientes impiden borrarlo. La operación es cancelable y tiene límite de tiempo; sigue vigilando la finalización en la nube.'})
+
+TEXT['en']['validation_cleanup_absent']='The file is absent from the mount; its registry entry was removed. Cloud absence is not independently verified.'
+
+TEXT['es']['validation_cleanup_absent']='El archivo no existe en el montaje; se ha retirado de la lista. Su ausencia en la nube no se ha verificado por separado.'
